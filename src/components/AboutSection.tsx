@@ -19,6 +19,18 @@ const bios = [
   },
 ];
 
+const containerVariants = {
+  hidden: {},
+  visible: {
+    transition: { staggerChildren: 0.15 },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 30 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" as const } },
+};
+
 const AboutSection = () => {
   const [active, setActive] = useState(0);
 
@@ -26,42 +38,54 @@ const AboutSection = () => {
     <section className="py-24 md:py-32">
       <div className="container mx-auto px-6 md:px-12">
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          variants={containerVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
         >
-          <h2 className="font-display text-3xl md:text-5xl font-bold mb-12">
-            About <span className="text-primary">Me</span>
-          </h2>
+          <motion.h2
+            variants={itemVariants}
+            className="font-display text-3xl md:text-5xl font-bold mb-4"
+          >
+            About <span className="text-gradient">Me</span>
+          </motion.h2>
 
-          <div className="flex gap-2 mb-8">
+          <motion.div
+            variants={itemVariants}
+            className="w-16 h-1 rounded-full mb-12"
+            style={{ background: "var(--gradient-amber)" }}
+          />
+
+          <motion.div variants={itemVariants} className="flex gap-2 mb-8 flex-wrap">
             {bios.map((bio, i) => (
-              <button
+              <motion.button
                 key={bio.label}
                 onClick={() => setActive(i)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 className={`font-display text-sm tracking-wider uppercase px-5 py-2.5 rounded-full border transition-all duration-300 ${
                   active === i
-                    ? "bg-primary text-primary-foreground border-primary"
+                    ? "bg-primary text-primary-foreground border-primary shadow-[var(--shadow-glow)]"
                     : "border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground"
                 }`}
               >
                 {bio.label}
-              </button>
+              </motion.button>
             ))}
-          </div>
+          </motion.div>
 
           <AnimatePresence mode="wait">
-            <motion.p
+            <motion.div
               key={active}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3 }}
-              className="text-secondary-foreground text-lg md:text-xl leading-relaxed max-w-3xl"
+              initial={{ opacity: 0, y: 20, filter: "blur(4px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              exit={{ opacity: 0, y: -20, filter: "blur(4px)" }}
+              transition={{ duration: 0.4 }}
             >
-              {bios[active].content}
-            </motion.p>
+              <p className="text-foreground/80 text-lg md:text-xl leading-relaxed max-w-3xl">
+                {bios[active].content}
+              </p>
+            </motion.div>
           </AnimatePresence>
         </motion.div>
       </div>
