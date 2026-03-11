@@ -6,7 +6,7 @@ const passions = [
   { icon: Code2, title: "Engineering", desc: "Scalable systems & technical leadership at Facilio", emoji: "⚡" },
   { icon: Bike, title: "Riding", desc: "Chasing horizons on two wheels across India", emoji: "🏍️" },
   { icon: Mountain, title: "Adventure", desc: "Mountains, coastlines & the unknown trails", emoji: "🏔️" },
-  { icon: Trophy, title: "Football", desc: "Competing on the pitch with Facilio F.C.", emoji: "⚽" },
+  { icon: Trophy, title: "Football", desc: "Competing on the pitch. Visca barca visca catalunya 🔵🔴", emoji: "⚽" },
   { icon: Rocket, title: "Entrepreneurship", desc: "Industrial operations & sustainable models", emoji: "🚀" },
   { icon: Tv, title: "Anime", desc: "Demon Slayer marathons to recharge the batteries", emoji: "⚔️" },
 ];
