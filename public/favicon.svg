@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="r-grad" x1="220" y1="200" x2="760" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4f79ff" />
+      <stop offset="1" stop-color="#cf84e7" />
+    </linearGradient>
+    <linearGradient id="r-overlay" x1="360" y1="560" x2="760" y2="980" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.04" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#140f3d" />
+
+  <path
+    d="M260 220 H500 A220 220 0 0 1 500 660 H260 M260 660 A220 220 0 0 1 500 980"
+    fill="none"
+    stroke="url(#r-grad)"
+    stroke-width="110"
+    stroke-linecap="square"
+    stroke-linejoin="round"
+  />
+
+  <path
+    d="M260 660 A220 220 0 0 1 500 980"
+    fill="none"
+    stroke="url(#r-overlay)"
+    stroke-width="110"
+    stroke-linecap="square"
+    stroke-linejoin="round"
+  />
+</svg>
