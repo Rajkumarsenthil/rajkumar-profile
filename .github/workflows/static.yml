@@ -30,6 +30,8 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          VITE_BASE_PATH: /        # ← This is the key fix
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
@@ -46,3 +48,10 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+```
+
+---
+
+Also make sure you have a `CNAME` file in your `public/` folder:
+```
+www.rajkumar.life
