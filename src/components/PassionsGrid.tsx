@@ -28,7 +28,7 @@ const cardVariants = {
 
 const PassionsGrid = () => {
   return (
-    <section className="py-24 md:py-32 bg-card relative overflow-hidden">
+    <section className="py-24 md:py-32 relative overflow-hidden">
       <FloatingParticles count={20} />
       <div className="container mx-auto px-6 md:px-12 relative z-10">
         <motion.div
@@ -46,7 +46,7 @@ const PassionsGrid = () => {
             viewport={{ once: true }}
             transition={{ delay: 0.3, duration: 0.5 }}
             className="h-1 rounded-full mb-16"
-            style={{ background: "var(--gradient-amber)" }}
+            style={{ background: "var(--gradient-accent)" }}
           />
         </motion.div>
 
@@ -64,10 +64,9 @@ const PassionsGrid = () => {
                 rotateY: 5,
                 transition: { duration: 0.3 },
               }}
-              className="group p-8 rounded-2xl border border-border bg-background hover:border-primary/40 transition-colors duration-500 shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-glow)] cursor-default relative overflow-hidden"
+              className="group p-8 rounded-2xl border border-border bg-card hover:border-primary/40 transition-colors duration-500 shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-glow)] cursor-default relative overflow-hidden"
               style={{ perspective: 1000 }}
             >
-              {/* Hover glow effect */}
               <motion.div
                 className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl"
                 style={{ background: "radial-gradient(circle at 50% 0%, hsl(var(--primary) / 0.08), transparent 70%)" }}

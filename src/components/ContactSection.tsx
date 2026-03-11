@@ -36,26 +36,25 @@ const ContactSection = () => {
             viewport={{ once: true }}
             transition={{ delay: 0.3, duration: 0.5 }}
             className="h-1 rounded-full mx-auto mb-8"
-            style={{ background: "var(--gradient-amber)" }}
+            style={{ background: "var(--gradient-accent)" }}
           />
           <p className="text-muted-foreground text-lg max-w-md mx-auto mb-6">
             Whether it's about engineering, entrepreneurship, or the next great ride — I'd love to hear from you.
           </p>
 
-          {/* Contact details */}
           <div className="flex flex-wrap justify-center gap-6 mb-10 text-sm text-muted-foreground">
             <motion.a
               href="tel:+916379271851"
-              whileHover={{ scale: 1.05, color: "hsl(var(--primary))" }}
-              className="flex items-center gap-2 transition-colors"
+              whileHover={{ scale: 1.05 }}
+              className="flex items-center gap-2 hover:text-primary transition-colors"
             >
               <Phone className="w-4 h-4 text-primary" />
               6379271851
             </motion.a>
             <motion.a
               href="mailto:rajkumarsenthil02@gmail.com"
-              whileHover={{ scale: 1.05, color: "hsl(var(--primary))" }}
-              className="flex items-center gap-2 transition-colors"
+              whileHover={{ scale: 1.05 }}
+              className="flex items-center gap-2 hover:text-primary transition-colors"
             >
               <Mail className="w-4 h-4 text-primary" />
               rajkumarsenthil02@gmail.com
@@ -68,7 +67,7 @@ const ContactSection = () => {
 
           <motion.a
             href="mailto:rajkumarsenthil02@gmail.com"
-            whileHover={{ scale: 1.08, boxShadow: "0 8px 40px -6px hsl(24 85% 48% / 0.5)" }}
+            whileHover={{ scale: 1.08, boxShadow: "0 8px 40px -6px hsl(210 75% 50% / 0.5)" }}
             whileTap={{ scale: 0.95 }}
             className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-primary text-primary-foreground font-display font-semibold text-lg shadow-[var(--shadow-glow)] transition-shadow"
           >
@@ -99,7 +98,7 @@ const ContactSection = () => {
                   transition: { duration: 0.4 },
                 }}
                 whileTap={{ scale: 0.9 }}
-                className="w-14 h-14 rounded-full border border-border bg-background flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/40 hover:shadow-[var(--shadow-glow)] transition-colors duration-300"
+                className="w-14 h-14 rounded-full border border-border bg-card flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/40 hover:shadow-[var(--shadow-glow)] transition-colors duration-300"
                 aria-label={social.label}
               >
                 <social.icon className="w-5 h-5" />

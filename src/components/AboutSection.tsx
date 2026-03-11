@@ -21,9 +21,7 @@ const bios = [
 
 const containerVariants = {
   hidden: {},
-  visible: {
-    transition: { staggerChildren: 0.15 },
-  },
+  visible: { transition: { staggerChildren: 0.15 } },
 };
 
 const itemVariants = {
@@ -53,7 +51,7 @@ const AboutSection = () => {
           <motion.div
             variants={itemVariants}
             className="w-16 h-1 rounded-full mb-12"
-            style={{ background: "var(--gradient-amber)" }}
+            style={{ background: "var(--gradient-accent)" }}
           />
 
           <motion.div variants={itemVariants} className="flex gap-2 mb-8 flex-wrap">

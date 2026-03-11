@@ -53,13 +53,11 @@ const ExperienceSection = () => {
             viewport={{ once: true }}
             transition={{ delay: 0.3, duration: 0.5 }}
             className="h-1 rounded-full mb-16"
-            style={{ background: "var(--gradient-amber)" }}
+            style={{ background: "var(--gradient-accent)" }}
           />
         </motion.div>
 
-        {/* Timeline */}
         <div className="relative">
-          {/* Vertical line */}
           <motion.div
             initial={{ height: 0 }}
             whileInView={{ height: "100%" }}
@@ -78,7 +76,6 @@ const ExperienceSection = () => {
                 transition={{ duration: 0.6, delay: i * 0.2 }}
                 className="relative pl-12 md:pl-20"
               >
-                {/* Timeline dot */}
                 <motion.div
                   initial={{ scale: 0 }}
                   whileInView={{ scale: 1 }}
@@ -132,7 +129,6 @@ const ExperienceSection = () => {
           </div>
         </div>
 
-        {/* Skills */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}

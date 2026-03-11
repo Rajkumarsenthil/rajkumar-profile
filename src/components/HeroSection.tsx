@@ -46,13 +46,13 @@ const HeroSection = () => {
 
       <motion.div
         className="absolute top-20 right-20 w-72 h-72 rounded-full opacity-20"
-        style={{ background: "var(--gradient-amber)" }}
+        style={{ background: "var(--gradient-blue)" }}
         animate={{ y: [0, -20, 0], scale: [1, 1.05, 1] }}
         transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.div
         className="absolute bottom-40 left-10 w-40 h-40 rounded-full opacity-10"
-        style={{ background: "var(--gradient-amber)" }}
+        style={{ background: "var(--gradient-accent)" }}
         animate={{ y: [0, 15, 0], x: [0, 10, 0] }}
         transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
       />
@@ -102,7 +102,7 @@ const HeroSection = () => {
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 1.8 + i * 0.15 }}
-                className="px-4 py-2 rounded-full border border-primary/30 text-primary text-sm font-display font-medium"
+                className="px-4 py-2 rounded-full border border-primary/30 text-primary text-sm font-display font-medium backdrop-blur-sm bg-background/20"
               >
                 {tag}
               </motion.span>
