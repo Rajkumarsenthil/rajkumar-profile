@@ -833,7 +833,9 @@ void main() {
     float bend = wave * uFlutter.x * along;
     if (uFlutter.w < 0.5) p.z += bend; else p.x += bend;
   }
-  vNormalW = normalize(mat3(modelMatrix) * normal);
+  // World-space normal through the normal matrix (view space, rotated back), so
+  // stretched spheres and cylinders light correctly.
+  vNormalW = normalize((vec4(normalMatrix * normal, 0.0) * viewMatrix).xyz);
   vec4 world = modelMatrix * vec4(p, 1.0);
   vWorld = world.xyz;
   gl_Position = projectionMatrix * viewMatrix * world;
@@ -844,7 +846,8 @@ export const propFragment = /* glsl */ `
 uniform vec3 uColor;
 uniform vec3 uColor2;
 // 0 plain, 1 canopy stripes, 2 centre stripe, 3 dolphin countershading, 4 bark,
-// 5 fabric stripes, 6 gull wing tips, 7 beach ball, 8 packed sand, 9 two-band flag, 10 weathered wood
+// 5 fabric stripes, 6 gull wing tips, 7 beach ball, 8 packed sand, 9 two-band flag, 10 weathered wood,
+// 11 skin, 12 hair and fur, 13 swimwear and cotton
 uniform float uPattern;
 uniform float uStripes;
 uniform float uShine;
@@ -904,19 +907,60 @@ void main() {
   } else if (uPattern > 8.5 && uPattern < 9.5) {
     // Two-band flag (red over yellow, like a lifeguard flag).
     base = mix(uColor2, uColor, step(0.0, vLocal.y));
-  } else if (uPattern > 9.5) {
+  } else if (uPattern > 9.5 && uPattern < 10.5) {
     // Weathered, sun-bleached wood with grain along its length.
     float grain = vnoise(vec2(vLocal.y * 3.0, (vLocal.x + vLocal.z) * 40.0));
     base = mix(uColor2, uColor, 0.55 + grain * 0.45);
+  } else if (uPattern > 11.5 && uPattern < 12.5) {
+    // Hair and fur: fine strands catching the light unevenly.
+    base = uColor * (0.84 + 0.22 * vnoise(vec2(vLocal.x * 60.0 + vLocal.z * 40.0, vLocal.y * 14.0)));
+  } else if (uPattern > 12.5) {
+    // Woven swimwear and cotton: a faint weave.
+    base = uColor * (0.93 + 0.07 * vnoise(vWorld.xz * 140.0 + vWorld.y * 60.0));
   }
-  float diffuse = max(dot(n, uSunDir), 0.0);
+  float ndl = dot(n, uSunDir);
+  float diffuse = max(ndl, 0.0);
+  bool skin = uPattern > 10.5 && uPattern < 11.5;
+  // Skin lets light wrap round its edges instead of cutting off hard.
+  if (skin) diffuse = max((ndl + 0.42) / 1.42, 0.0) * 0.94;
   float sky = 0.5 + 0.5 * n.y;
   vec3 color = base * (vec3(1.1, 1.05, 0.95) * diffuse * 1.4 + vec3(0.42, 0.52, 0.66) * sky * 0.55);
+  // A warm glow where light scatters under the skin, strongest on the shadow side.
+  if (skin) color += base * vec3(0.3, 0.1, 0.05) * (1.0 - max(ndl, 0.0)) * 0.45;
   // Cloth lets a little sun through when lit from behind.
   if (uFlutter.x > 0.0) color += base * vec3(0.9, 0.8, 0.6) * max(dot(-n, uSunDir), 0.0) * 0.5;
+  // Fabric and fur pick up a soft sheen at grazing angles.
+  if (uPattern > 11.5) color += base * 0.18 * pow(1.0 - max(dot(n, view), 0.0), 3.0);
   vec3 h = normalize(uSunDir + view);
-  color += vec3(1.2) * pow(max(dot(n, h), 0.0), 60.0) * uShine;
+  color += vec3(1.2) * pow(max(dot(n, h), 0.0), skin ? 26.0 : 60.0) * uShine;
   gl_FragColor = vec4(color, uOpacity);
+}
+`;
+
+/** Soft contact shadows under people and animals: instanced ellipses on the sand. */
+export const contactVertex = /* glsl */ `
+varying vec2 vUv;
+
+void main() {
+  vUv = uv;
+  vec4 p = vec4(position, 1.0);
+  #ifdef USE_INSTANCING
+  p = instanceMatrix * p;
+  #endif
+  gl_Position = projectionMatrix * modelViewMatrix * p;
+}
+`;
+
+export const contactFragment = /* glsl */ `
+uniform float uOpacity;
+varying vec2 vUv;
+
+void main() {
+  float r = length(vUv * 2.0 - 1.0);
+  float a = (1.0 - smoothstep(0.2, 1.0, r)) * 0.38 * uOpacity;
+  if (a < 0.004) discard;
+  // Lit by the blue sky, like the other shadows on the sand. Linear light.
+  gl_FragColor = vec4(0.05, 0.06, 0.1, a);
 }
 `;
 

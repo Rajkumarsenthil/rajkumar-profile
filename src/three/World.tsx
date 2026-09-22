@@ -49,7 +49,11 @@ const DEPTH = 170;
 const NEAR = 6;
 const HALF_WIDTH = 56;
 
+type CameraOverride = Partial<Pick<Frame, "camX" | "camY" | "lookY" | "lookZ">>;
+
 type Frame = {
+  /** Sideways camera offset; the camera pans rather than turns. */
+  camX?: number;
   camY: number;
   lookY: number;
   lookZ: number;
@@ -59,8 +63,33 @@ type Frame = {
   aurora: number;
   /** 0 = moonlit blue ridges, 1 = violet-lit ridges. */
   violet: number;
-  /** Camera overrides for the beach, blended in with the scene. */
-  water?: Partial<Pick<Frame, "camY" | "lookY" | "lookZ">>;
+  /** Camera overrides for the beach for a given viewport aspect, blended in with the scene. */
+  water?: (aspect: number) => CameraOverride;
+};
+
+/**
+ * The beach is laid out for a wide screen. On a narrow portrait screen the intro
+ * drone climbs until both palms fit either side of the frame (at least the desktop
+ * height), and looks a little further out so the name still sits over the water.
+ */
+const diveAtBeach = (aspect: number): CameraOverride => {
+  const camY = Math.max(48, 21 / (Math.tan(THREE.MathUtils.degToRad(27.5)) * aspect) - 4);
+  return { camY, lookZ: -52 - (camY - 48) * 0.26 };
+};
+
+/**
+ * At eye level a portrait screen only sees a few metres of beach either side, so the
+ * camera pans right to keep the right-hand palm swaying at the edge of the frame.
+ */
+const PALM_CROWN = { x: 10.5, z: -14.9, reach: 3.5 };
+const eyeLevelAtBeach = (aspect: number): CameraOverride => {
+  const halfWidth = -PALM_CROWN.z * Math.tan(THREE.MathUtils.degToRad(27.5)) * aspect;
+  // Park the crown just past the right edge so only its fronds reach in, to about
+  // the middle of the right half: the chapter titles on the left stay on clear sky.
+  const inner = PALM_CROWN.reach + halfWidth * 0.45;
+  // Full pan on portrait screens, easing out to none by a normal laptop aspect.
+  const landscape = THREE.MathUtils.smoothstep(aspect, 1.0, 1.3);
+  return { camX: Math.max(0, PALM_CROWN.x - inner) * (1 - landscape) };
 };
 
 /** High above the valley, looking down at the stream: where the intro dive starts. */
@@ -74,17 +103,17 @@ const DIVE: Frame = {
   violet: 0,
   // At the beach the drone looks out over the surf, so the name sits on clear water
   // along the shoreline and the palms and beach life stay below it.
-  water: { lookZ: -52 },
+  water: diveAtBeach,
 };
 
 const FRAMES: Record<string, Frame> = {
-  top: { camY: 4.2, lookY: 1.6, lookZ: -60, terrain: 1, stars: 1, aurora: 0.75, violet: 0.1 },
-  statement: { camY: 6.5, lookY: 0.5, lookZ: -60, terrain: 0.7, stars: 0.9, aurora: 0.95, violet: 0.2 },
-  work: { camY: 3.4, lookY: -1.6, lookZ: -40, terrain: 0.6, stars: 0.7, aurora: 0.55, violet: 0.15 },
-  experience: { camY: 11, lookY: 4, lookZ: -70, terrain: 0.5, stars: 1, aurora: 1.15, violet: 0.35 },
-  skills: { camY: 5, lookY: 1, lookZ: -60, terrain: 0.55, stars: 0.9, aurora: 0.9, violet: 0.5 },
-  about: { camY: 2.4, lookY: 3.6, lookZ: -60, terrain: 0.65, stars: 1.1, aurora: 0.85, violet: 0.8 },
-  contact: { camY: 3, lookY: 42, lookZ: -60, terrain: 0.85, stars: 1.7, aurora: 1.2, violet: 0.4 },
+  top: { camY: 4.2, lookY: 1.6, lookZ: -60, terrain: 1, stars: 1, aurora: 0.75, violet: 0.1, water: eyeLevelAtBeach },
+  statement: { camY: 6.5, lookY: 0.5, lookZ: -60, terrain: 0.7, stars: 0.9, aurora: 0.95, violet: 0.2, water: eyeLevelAtBeach },
+  work: { camY: 3.4, lookY: -1.6, lookZ: -40, terrain: 0.6, stars: 0.7, aurora: 0.55, violet: 0.15, water: eyeLevelAtBeach },
+  experience: { camY: 11, lookY: 4, lookZ: -70, terrain: 0.5, stars: 1, aurora: 1.15, violet: 0.35, water: eyeLevelAtBeach },
+  skills: { camY: 5, lookY: 1, lookZ: -60, terrain: 0.55, stars: 0.9, aurora: 0.9, violet: 0.5, water: eyeLevelAtBeach },
+  about: { camY: 2.4, lookY: 3.6, lookZ: -60, terrain: 0.65, stars: 1.1, aurora: 0.85, violet: 0.8, water: eyeLevelAtBeach },
+  contact: { camY: 3, lookY: 42, lookZ: -60, terrain: 0.85, stars: 1.7, aurora: 1.2, violet: 0.4, water: eyeLevelAtBeach },
 };
 
 const SECTION_ORDER = ["top", "statement", "work", "experience", "skills", "about", "contact"];
@@ -222,30 +251,34 @@ function useSectionStops() {
 
 const smooth = (t: number) => t * t * (3 - 2 * t);
 
-/** A frame's camera as seen in the current blend of night and beach. */
-function resolve(frame: Frame, day: number): Frame {
+/** A frame's camera as seen in the current blend of night and beach, for this viewport. */
+function resolve(frame: Frame, day: number, aspect: number): Frame {
   if (!frame.water || day <= 0) return frame;
-  const w = frame.water;
+  const w = frame.water(aspect);
+  const camX = frame.camX ?? 0;
   return {
     ...frame,
+    camX: camX + ((w.camX ?? camX) - camX) * day,
     camY: frame.camY + ((w.camY ?? frame.camY) - frame.camY) * day,
     lookY: frame.lookY + ((w.lookY ?? frame.lookY) - frame.lookY) * day,
     lookZ: frame.lookZ + ((w.lookZ ?? frame.lookZ) - frame.lookZ) * day,
   };
 }
 
-function frameAt(stops: Stop[], y: number, day: number): Frame {
-  if (y <= stops[0].at) return resolve(stops[0].frame, day);
+function frameAt(stops: Stop[], y: number, day: number, aspect: number): Frame {
+  if (y <= stops[0].at) return resolve(stops[0].frame, day, aspect);
   const last = stops[stops.length - 1];
-  if (y >= last.at) return resolve(last.frame, day);
+  if (y >= last.at) return resolve(last.frame, day, aspect);
   for (let i = 0; i < stops.length - 1; i++) {
-    const a = { frame: resolve(stops[i].frame, day), at: stops[i].at };
-    const b = { frame: resolve(stops[i + 1].frame, day), at: stops[i + 1].at };
+    const a = { frame: resolve(stops[i].frame, day, aspect), at: stops[i].at };
+    const b = { frame: resolve(stops[i + 1].frame, day, aspect), at: stops[i + 1].at };
     if (y >= a.at && y < b.at) {
       const t = smooth((y - a.at) / Math.max(1, b.at - a.at));
       const mix = (key: "camY" | "lookY" | "lookZ" | "terrain" | "stars" | "aurora" | "violet") =>
         a.frame[key] + (b.frame[key] - a.frame[key]) * t;
+      const camX = (a.frame.camX ?? 0) + ((b.frame.camX ?? 0) - (a.frame.camX ?? 0)) * t;
       return {
+        camX,
         camY: mix("camY"),
         lookY: mix("lookY"),
         lookZ: mix("lookZ"),
@@ -256,7 +289,7 @@ function frameAt(stops: Stop[], y: number, day: number): Frame {
       };
     }
   }
-  return resolve(last.frame, day);
+  return resolve(last.frame, day, aspect);
 }
 
 /**
@@ -320,12 +353,13 @@ function Scene({ scrollY, quality, reduce, dayRef }: SceneProps) {
   const pointer = usePointer();
 
   const startBlend = getScene() === "water" ? 1 : 0;
-  const start = resolve(DIVE, startBlend);
+  const start = resolve(DIVE, startBlend, window.innerWidth / Math.max(1, window.innerHeight));
   const motion = useRef({
     travel: 0,
     flow: 0,
     last: Number.NaN,
     boost: 0,
+    camX: start.camX ?? 0,
     camY: start.camY,
     lookY: start.lookY,
     lookZ: start.lookZ,
@@ -409,7 +443,16 @@ function Scene({ scrollY, quality, reduce, dayRef }: SceneProps) {
     dayRef.current = dayValue;
     const night = 1 - dayValue;
 
-    const target = frameAt(stops.current, y, dayValue);
+    const target = frameAt(stops.current, y, dayValue, state.size.width / Math.max(1, state.size.height));
+    if (!s.ready) {
+      // Start exactly on the first framing: the canvas can differ from the window at load
+      // (mobile toolbars), and the beach framing depends on the aspect.
+      s.camX = target.camX ?? 0;
+      s.camY = target.camY;
+      s.lookY = target.lookY;
+      s.lookZ = target.lookZ;
+    }
+    s.camX = damp(s.camX, target.camX ?? 0, 2.2, dt);
     s.camY = damp(s.camY, target.camY, 2.2, dt);
     s.lookY = damp(s.lookY, target.lookY, 2.2, dt);
     s.lookZ = damp(s.lookZ, target.lookZ, 2.2, dt);
@@ -428,8 +471,8 @@ function Scene({ scrollY, quality, reduce, dayRef }: SceneProps) {
     s.px = damp(s.px, reduce ? 0 : px, 2.5, dt);
     s.py = damp(s.py, reduce ? 0 : py, 2.5, dt);
 
-    state.camera.position.set(s.px * 1.2, s.camY - s.py * 0.5, 0);
-    state.camera.lookAt(s.px * 4, s.lookY - s.py * 1.5, s.lookZ);
+    state.camera.position.set(s.camX + s.px * 1.2, s.camY - s.py * 0.5, 0);
+    state.camera.lookAt(s.camX + s.px * 4, s.lookY - s.py * 1.5, s.lookZ);
     state.camera.updateMatrixWorld();
     skyMesh.current?.position.copy(state.camera.position);
 

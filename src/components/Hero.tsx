@@ -43,7 +43,7 @@ export function Hero({ ready }: { ready: boolean }) {
 
   return (
     <section id="top" ref={sectionRef} className={staticCopy ? "relative" : "relative h-[210svh]"}>
-      <div className={staticCopy ? "flex min-h-svh flex-col justify-center py-28" : "sticky top-0 flex h-svh flex-col justify-end overflow-hidden pb-8 pt-24 md:justify-center md:py-0"}>
+      <div className={staticCopy ? "flex min-h-svh flex-col justify-center py-28" : "sticky top-0 flex h-svh flex-col justify-end overflow-hidden pb-5 pt-24 sm:pb-8 md:justify-center md:py-0"}>
         <div className="container-x">
           <motion.div
             style={staticCopy ? undefined : { y: nameY }}
@@ -66,9 +66,13 @@ export function Hero({ ready }: { ready: boolean }) {
 
           <motion.div
             style={staticCopy ? undefined : { opacity: copyOpacity, y: copyY, pointerEvents: copyEvents }}
-            className="mt-5 grid items-end gap-6 md:mt-6 md:gap-8 lg:grid-cols-12 lg:gap-10"
+            className="mt-4 grid items-end gap-5 sm:mt-5 sm:gap-6 md:mt-6 md:gap-8 lg:grid-cols-12 lg:gap-10"
           >
             <div className="text-card lg:col-span-7">
+              <p className="eyebrow mb-4 flex items-center gap-3">
+                <span className="h-px w-8 bg-accent" />
+                {profile.tagline}
+              </p>
               <p className="max-w-2xl text-xl font-medium leading-snug tracking-[-0.02em] sm:text-2xl md:text-3xl">
                 {parseAccent(profile.headline).map((word, i) => (
                   <span key={`${word.text}-${i}`} className={word.accent ? "font-serif font-normal italic text-aurora pr-[0.08em]" : undefined}>
@@ -76,13 +80,15 @@ export function Hero({ ready }: { ready: boolean }) {
                   </span>
                 ))}
               </p>
+              {/* Short phones don't have the height for it; the name and stats come first. */}
+              <p className="mt-4 max-w-xl leading-relaxed text-fg-muted md:hidden [@media(max-height:720px)]:hidden">{profile.summary}</p>
               <p className="mt-5 hidden max-w-xl leading-relaxed text-fg-muted md:block">{profile.intro}</p>
               <div className="mt-5 flex flex-wrap items-center gap-3 md:mt-7">
-                <a href="#work" className="btn-primary group">
+                <a href="#work" className="btn-primary group max-sm:px-4 max-sm:py-2.5">
                   Explore the work
                   <ArrowDown className="size-4 transition-transform duration-300 group-hover:translate-y-0.5" />
                 </a>
-                <a href={profile.resumeUrl} target="_blank" rel="noreferrer" className="btn-ghost">
+                <a href={profile.resumeUrl} target="_blank" rel="noreferrer" className="btn-ghost max-sm:px-4 max-sm:py-2.5">
                   Résumé <Download className="size-4" />
                 </a>
                 {profile.socials.map((social) => (

@@ -49,10 +49,19 @@ export function Nav({ ready }: { ready: boolean }) {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
+    // The menu only exists below lg; widening past it (an iPad turning to landscape)
+    // would otherwise hide the menu while leaving the page scroll-locked.
+    // Same breakpoint as Tailwind's lg (64rem), so it tracks a non-default font size too.
+    const wide = window.matchMedia("(min-width: 64rem)");
+    const onWide = () => {
+      if (wide.matches) setOpen(false);
+    };
     window.addEventListener("keydown", onKey);
+    wide.addEventListener("change", onWide);
     return () => {
       unlockScroll();
       window.removeEventListener("keydown", onKey);
+      wide.removeEventListener("change", onWide);
     };
   }, [open]);
 
@@ -83,7 +92,7 @@ export function Nav({ ready }: { ready: boolean }) {
             <span className="hidden font-mono text-xs uppercase tracking-[0.16em] sm:inline">{profile.name}</span>
           </a>
 
-          <ul className="hidden items-center gap-1 md:flex">
+          <ul className="hidden items-center gap-1 lg:flex">
             {navLinks.map((link) => (
               <li key={link.id}>
                 <a
@@ -120,7 +129,7 @@ export function Nav({ ready }: { ready: boolean }) {
             <button
               type="button"
               onClick={() => setOpen((value) => !value)}
-              className="grid size-9 place-items-center rounded-full border border-line text-fg md:hidden"
+              className="grid size-9 place-items-center rounded-full border border-line text-fg lg:hidden"
               aria-expanded={open}
               aria-controls="mobile-menu"
               aria-label={open ? "Close menu" : "Open menu"}
@@ -135,7 +144,8 @@ export function Nav({ ready }: { ready: boolean }) {
         {open && (
           <motion.div
             id="mobile-menu"
-            className="pointer-events-auto fixed inset-0 z-0 flex flex-col bg-bg/95 px-6 pb-10 pt-28 backdrop-blur-xl md:hidden"
+            data-lenis-prevent
+            className="pointer-events-auto fixed inset-0 z-0 flex flex-col overflow-y-auto overscroll-contain bg-bg/95 px-6 pb-10 pt-28 backdrop-blur-xl lg:hidden"
             initial={{ clipPath: "inset(0% 0% 100% 0%)" }}
             animate={{ clipPath: "inset(0% 0% 0% 0%)" }}
             exit={{ clipPath: "inset(0% 0% 100% 0%)" }}

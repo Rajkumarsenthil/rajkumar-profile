@@ -41,6 +41,8 @@ export const profile = {
   headline: "I design the backend systems that keep *enterprise facilities running.*",
   intro:
     "At Facilio I lead the core of our maintenance platform, from work orders and scheduling to inventory and procurement. I like systems that stay calm under load, integrations that hold, and software that gives people on the ground their time back.",
+  /** The one-line version of the intro, for small screens. */
+  summary: "I lead the core of Facilio's maintenance platform: work orders, scheduling, inventory and procurement.",
   socials: [
     { label: "LinkedIn", href: "https://www.linkedin.com/in/srk-rajkumar/", handle: "srk-rajkumar" },
     { label: "GitHub", href: "https://github.com/Rajkumarsenthil", handle: "Rajkumarsenthil" },

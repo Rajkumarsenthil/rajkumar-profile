@@ -3,8 +3,31 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { Water } from "three/examples/jsm/objects/Water.js";
+import {
+  AWAY,
+  BALL,
+  BOARD,
+  CASTLE,
+  COOLER,
+  DRIFTWOOD,
+  LOUNGERS,
+  SHORE_Z,
+  SUN_DIR,
+  TOWEL,
+  TOWER,
+  UMBRELLA,
+  SURF_RANGE,
+  WATER_Y,
+  propUniforms,
+  sandY,
+  seeded,
+  smoothstepJs,
+  surfHeight,
+} from "./beachKit";
+import type { DayRef, PropLook } from "./beachKit";
 import { makeWaterNormals } from "./DayGrade";
 import { NO_REFLECTION } from "./layers";
+import { People } from "./People";
 import {
   beachFragment,
   beachVertex,
@@ -34,38 +57,13 @@ import {
  * Everything here outputs linear light and is finished by the DayGrade pass.
  */
 
-const SHORE_Z = -24;
-const WATER_Y = -4;
 
-/** Mid-morning sun, ahead and to the right: a clear blue sky and a glitter path on the sea. */
-const SUN_DIR = new THREE.Vector3()
-  .setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 17), THREE.MathUtils.degToRad(158))
-  .normalize();
-
-/** Must match SURF_RANGE in shaders.ts. */
-const SURF_RANGE = 72;
-
-type DayRef = { current: number };
 export type SeaPointer = { current: { x: number; y: number; at: number; ripple: { x: number; y: number; at: number } } };
-
-const seeded = (seed: number) => {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-};
 
 const hash = (n: number) => {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
 };
-
-/** Height of the sand at a given z, matching beachVertex. */
-const sandY = (z: number) => WATER_Y + (z - SHORE_Z) * 0.07;
 
 function useDisposable<T extends { dispose: () => void }>(factory: () => T): T {
   // The factory runs once; callers pass inline builders that never change.
@@ -77,32 +75,10 @@ function useDisposable<T extends { dispose: () => void }>(factory: () => T): T {
 
 /* ------------------------------------------------------------------ props */
 
-type PropLook = {
-  color: [number, number, number];
-  color2?: [number, number, number];
-  pattern?: number;
-  stripes?: number;
-  shine?: number;
-  /** Cloth ripple: amplitude, wavenumber, speed, axis (0 flag along +x, 1 tail along -y). */
-  flutter?: [number, number, number, number];
-};
-
 function usePropUniforms(look: PropLook) {
-  return useMemo(
-    () => ({
-      uColor: { value: new THREE.Vector3(...look.color) },
-      uColor2: { value: new THREE.Vector3(...(look.color2 ?? look.color)) },
-      uPattern: { value: look.pattern ?? 0 },
-      uStripes: { value: look.stripes ?? 8 },
-      uShine: { value: look.shine ?? 0.15 },
-      uOpacity: { value: 0 },
-      uSunDir: { value: SUN_DIR.clone() },
-      uTime: { value: 0 },
-      uFlutter: { value: new THREE.Vector4(...(look.flutter ?? [0, 0, 0, 0])) },
-    }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
+  // Built once per prop; the look never changes after mount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => propUniforms(look), []);
 }
 
 type PropPlacement = {
@@ -156,24 +132,6 @@ type Kit = ReturnType<typeof useKit>;
 function Block({ kit, look, day, size, at, rotation }: { kit: Kit; look: PropLook; day: DayRef; size: [number, number, number]; at: [number, number, number]; rotation?: [number, number, number] }) {
   return <Prop geometry={kit.box} look={look} day={day} position={at} rotation={rotation} scale={size} />;
 }
-
-/* Where things stand on the beach (x, z). Everything tall sits below or beside the
-   name in the opening drone shot, and frames the text in the eye-level views. */
-const UMBRELLA = { x: -6.5, z: -16, radius: 1.55, height: 2.35 };
-const BOARD = { x: 10.2, z: -15.6, length: 2.1 };
-const LOUNGERS = [
-  { x: -8.1, z: -14.3, yaw: 0.14 },
-  { x: -5.9, z: -13.9, yaw: -0.06 },
-];
-const COOLER = { x: -4.5, z: -15.2, yaw: 0.4 };
-const TOWEL = { x: -3.3, z: -16.9, angle: 0.35 };
-const BALL = { x: 1.6, z: -17.3, radius: 0.28 };
-const CASTLE = { x: 4.4, z: -17.1 };
-const DRIFTWOOD = { x: 7.6, z: -16.9, yaw: 0.35 };
-const TOWER = { x: -15.5, z: -19.5, yaw: 0.28 };
-
-/** Direction shadows fall across the sand (away from the sun). */
-const AWAY = new THREE.Vector2(-SUN_DIR.x, -SUN_DIR.z).normalize();
 
 const WOOD: PropLook = { color: [0.55, 0.37, 0.22], color2: [0.36, 0.23, 0.13], pattern: 10, shine: 0.12 };
 const PAINTED: PropLook = { color: [0.86, 0.84, 0.79], color2: [0.7, 0.67, 0.61], pattern: 10, shine: 0.08 };
@@ -971,64 +929,6 @@ function Kite({ day, reduce }: { day: DayRef; reduce: boolean }) {
   );
 }
 
-/* The surf model, ported from surfVertex so the paddleboarder rides the rendered swell. */
-const SURF_SPEED = 5.5;
-const SURF_SPACING = 24;
-const fract = (v: number) => v - Math.floor(v);
-const glslMod = (a: number, b: number) => a - b * Math.floor(a / b);
-const smoothstepJs = (e0: number, e1: number, v: number) => {
-  const t = Math.min(1, Math.max(0, (v - e0) / (e1 - e0)));
-  return t * t * (3 - 2 * t);
-};
-const hash21 = (x: number, y: number) => {
-  let px = fract(x * 233.34);
-  let py = fract(y * 851.73);
-  const d = px * (px + 23.45) + py * (py + 23.45);
-  px += d;
-  py += d;
-  return fract(px * py);
-};
-const vnoise = (x: number, y: number) => {
-  const ix = Math.floor(x);
-  const iy = Math.floor(y);
-  const fx = x - ix;
-  const fy = y - iy;
-  const ux = fx * fx * (3 - 2 * fx);
-  const uy = fy * fy * (3 - 2 * fy);
-  const a = hash21(ix, iy);
-  const b = hash21(ix + 1, iy);
-  const c = hash21(ix, iy + 1);
-  const d = hash21(ix + 1, iy + 1);
-  return a + (b - a) * ux + (c - a) * uy * (1 - ux) + (d - b) * ux * uy;
-};
-const surfAmplitude = (d: number) => 1.25 * smoothstepJs(SURF_RANGE, 42, d) * smoothstepJs(2.5, 15, d);
-const surfBend = (x: number) => Math.sin(x * 0.07 + 1.3) * 3.5 + (vnoise(x * 0.045, 3) - 0.5) * 11;
-
-/** Height of the surf surface and its tallest crest at distance D from the shore. */
-function surfAt(x: number, D: number, t: number) {
-  const bend = surfBend(x) * smoothstepJs(SURF_RANGE, 20, D);
-  let h = 0;
-  let crest = 0;
-  for (let k = 0; k < 3; k++) {
-    const life = glslMod(k * SURF_SPACING - t * SURF_SPEED, SURF_RANGE);
-    const lifeFade = smoothstepJs(0, 8, life) * smoothstepJs(SURF_RANGE, SURF_RANGE - 8, life);
-    const center = life + bend;
-    const dd = D - center;
-    const width = dd < 0 ? 1.5 : 5.5;
-    const shape = Math.exp(-(dd * dd) / (width * width));
-    const a = surfAmplitude(center) * lifeFade;
-    h += a * shape;
-    crest = Math.max(crest, shape * a);
-  }
-  return { h, crest };
-}
-
-/** Rendered height at a world position, allowing for the crest leaning shoreward in surfVertex. */
-function surfHeight(x: number, D: number, t: number) {
-  const guess = surfAt(x, D, t);
-  return surfAt(x, D + guess.crest * 0.55, t).h;
-}
-
 const SUP_LANE = 56; // metres out from the shore: beyond the break, where the swell is gentle
 const SUP_RANGE: [number, number] = [-18, 22];
 const STROKE = 1.7; // seconds per paddle stroke
@@ -1593,6 +1493,7 @@ export function Sea({ day, reduce, pointer, pointerActive }: SeaProps) {
       <Gulls day={day} reduce={reduce} />
       <SoaringGulls day={day} reduce={reduce} />
       <Kite day={day} reduce={reduce} />
+      <People day={day} reduce={reduce} />
     </group>
   );
 }

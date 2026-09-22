@@ -39,20 +39,20 @@ export function Experience() {
 
         <motion.ol
           ref={listRef}
-          className="relative space-y-10 pl-8 md:pl-12 lg:col-span-7"
+          className="relative space-y-10 lg:col-span-7 lg:pl-12"
           variants={staggerContainer}
           initial="hidden"
           whileInView="visible"
           viewport={viewportOnce}
         >
-          <span aria-hidden className="absolute bottom-2 left-0 top-2 w-px bg-line" />
-          <motion.span aria-hidden style={{ scaleY }} className="absolute bottom-2 left-0 top-2 w-px origin-top bg-accent" />
+          <span aria-hidden className="absolute bottom-2 left-0 top-2 hidden w-px bg-line lg:block" />
+          <motion.span aria-hidden style={{ scaleY }} className="absolute bottom-2 left-0 top-2 hidden w-px origin-top bg-accent lg:block" />
 
           {experience.map((role, i) => (
             <motion.li key={role.title} variants={fadeUp} transition={{ duration: 0.8, ease: EASE }} className="relative">
               <span
                 aria-hidden
-                className={`absolute top-8 size-2.5 rounded-full ring-4 ring-bg -left-[calc(2rem+5px)] md:-left-[calc(3rem+5px)] ${
+                className={`absolute top-8 hidden size-2.5 rounded-full ring-4 ring-bg lg:block lg:-left-[calc(3rem+5px)] ${
                   i === 0 ? "bg-accent shadow-[0_0_16px_var(--accent)]" : "bg-line-strong"
                 }`}
               />
