@@ -1,29 +1,87 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { ThemeProvider } from "@/hooks/useTheme";
-import Index from "./pages/Index.tsx";
-import NotFound from "./pages/NotFound.tsx";
+import { useCallback, useEffect, useState } from "react";
+import { useReducedMotion } from "motion/react";
+import { About } from "./components/About";
+import { Contact } from "./components/Contact";
+import { Cursor } from "./components/Cursor";
+import { Experience } from "./components/Experience";
+import { Footer } from "./components/Footer";
+import { Hero } from "./components/Hero";
+import { Loader } from "./components/Loader";
+import { Marquee } from "./components/Marquee";
+import { Nav } from "./components/Nav";
+import { ScrollProgress } from "./components/ScrollProgress";
+import { Skills } from "./components/Skills";
+import { Statement } from "./components/Statement";
+import { Work } from "./components/Work";
+import { WorldLayer } from "./components/WorldLayer";
+import { useActiveSection } from "./hooks/useActiveSection";
+import { destroySmoothScroll, initSmoothScroll } from "./lib/scroll";
+import { sound } from "./lib/sound";
 
-const queryClient = new QueryClient();
+const SOUND_SECTIONS = ["top", "statement", "work", "experience", "skills", "about", "contact"];
 
-const App = () => (
-  <ThemeProvider>
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter basename={import.meta.env.BASE_URL}>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
-  </ThemeProvider>
-);
+/** Retunes the soundscape to whichever section is on screen. */
+function SoundDirector() {
+  const active = useActiveSection(SOUND_SECTIONS);
+  useEffect(() => {
+    sound.setSection(active ?? "top");
+  }, [active]);
+  return null;
+}
 
-export default App;
+/** Feeds pointer position to `.spotlight` cards so their glow follows the cursor. */
+function useSpotlight() {
+  useEffect(() => {
+    const onMove = (event: PointerEvent) => {
+      const card = (event.target as Element | null)?.closest<HTMLElement>(".spotlight");
+      if (!card) return;
+      const rect = card.getBoundingClientRect();
+      card.style.setProperty("--mx", `${event.clientX - rect.left}px`);
+      card.style.setProperty("--my", `${event.clientY - rect.top}px`);
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => window.removeEventListener("pointermove", onMove);
+  }, []);
+}
+
+export default function App() {
+  const reduce = useReducedMotion();
+  // Hero and nav hold their entrance animations until the visitor enters.
+  const [ready, setReady] = useState(false);
+  const onEnter = useCallback(() => setReady(true), []);
+  useSpotlight();
+
+  useEffect(() => {
+    if (reduce) return;
+    initSmoothScroll();
+    return () => destroySmoothScroll();
+  }, [reduce]);
+
+  return (
+    <>
+      <a href="#main" className="skip-link">
+        Skip to content
+      </a>
+      <WorldLayer />
+      <div aria-hidden className="grain" />
+      <Loader onEnter={onEnter} />
+      <ScrollProgress />
+      <Cursor />
+      <SoundDirector />
+      <div className="relative z-10">
+        <Nav ready={ready} />
+        <main id="main">
+          <Hero ready={ready} />
+          <Marquee />
+          <Statement />
+          <Work />
+          <Experience />
+          <Skills />
+          <About />
+          <Contact />
+        </main>
+        <Footer />
+      </div>
+    </>
+  );
+}

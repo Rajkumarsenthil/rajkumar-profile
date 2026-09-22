@@ -1,35 +1,22 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
-import path from "path";
-import { componentTagger } from "lovable-tagger";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 
-const normalizeBasePath = (value: string) => {
-  const cleanedValue = value.trim();
-
-  if (cleanedValue === "" || cleanedValue === "/") {
-    return "/";
-  }
-
-  const withLeadingSlash = cleanedValue.startsWith("/") ? cleanedValue : `/${cleanedValue}`;
-  return withLeadingSlash.endsWith("/") ? withLeadingSlash : `${withLeadingSlash}/`;
+// GitHub Pages serves this site from the root of a custom domain, but keep the
+// base path configurable so a project-pages deploy (/<repo>/) still works.
+const normalizeBase = (value: string | undefined) => {
+  const trimmed = (value ?? "/").trim();
+  if (trimmed === "" || trimmed === "/") return "/";
+  const withLeading = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  return withLeading.endsWith("/") ? withLeading : `${withLeading}/`;
 };
 
-const basePath = normalizeBasePath(process.env.VITE_BASE_PATH ?? "/");
-
-// https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
-  base: basePath,
-  server: {
-    host: "::",
-    port: 8080,
-    hmr: {
-      overlay: false,
-    },
+export default defineConfig({
+  base: normalizeBase(process.env.VITE_BASE_PATH),
+  plugins: [react(), tailwindcss()],
+  build: {
+    target: "es2022",
+    // Three.js is lazy-loaded in its own chunk; it is expected to be large.
+    chunkSizeWarningLimit: 1000,
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
-  },
-}));
+});

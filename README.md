@@ -1,73 +1,53 @@
-# Welcome to your Lovable project
+# rajkumar.life
 
-## Project info
+Portfolio of **Rajkumar S**, Lead Engineer at Facilio (backend and integration architecture).
+Live at [www.rajkumar.life](https://www.rajkumar.life), deployed to GitHub Pages from `main`.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## The experience
 
-## How can I edit this code?
+Two worlds, switched from the toggle in the nav (remembered per visitor):
 
-There are several ways of editing your application.
+- **Sky** — a night flight over a point-cloud mountain valley with a glowing event stream, aurora curtains and a starfield. Stars near the cursor glow and drift away; clicking the sky sends a ripple of light.
+- **Water** — a sunlit beach built on three.js's physically based `Sky` (with lit clouds) and reflective `Water`: turquoise shallows, breaking surf that runs up the sand, dolphins, sailboats, gulls, palms, headlands, an umbrella, towel, surfboard, shells and footprints. The cursor leaves ripples on the sea and a click makes a splash.
 
-**Use Lovable**
+Switching cross-fades the page colours (registered CSS custom properties) and the 3D world together over an eased 2.4 s. The beach is HDR and finished by a filmic grade (`src/three/DayGrade.ts`) that blends in only for that scene.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+Also:
 
-Changes made via Lovable will be committed automatically to this repo.
+- **Scroll-driven camera** with an intro dive, per-section framing and a pinned horizontal project reel on desktop.
+- **Chapter titles** drawn by one particle system that morphs from word to word at night; at the beach they become crisp, rippling water lettering.
+- **Generative sound** (Web Audio, nothing downloaded): at night a pad, wind, arpeggio and bells that follow each chapter; at the beach a laid-back ukulele-and-marimba tune (Karplus–Strong plucked strings) over surf that breaks in time with the waves, and gulls.
+- **Accessible fallbacks**: content is real HTML, reduced motion gets a calm static version, and browsers without WebGL get 2D titles.
 
-**Use your preferred IDE**
+## Stack
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+Vite · React 19 · TypeScript · Tailwind CSS v4 · Motion · Three.js via React Three Fiber and `@react-three/postprocessing` · Lenis · Fontsource (Geist, Geist Mono, Instrument Serif).
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+## Develop
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+npm install
+npm run dev      # http://localhost:5173
+npm run lint
+npm run build    # type-checks, then writes ./dist
+npm run preview  # serves ./dist
 ```
 
-**Edit a file directly in GitHub**
+## Where things live
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+| What | File |
+| --- | --- |
+| All copy: intro, statement, projects, experience, skills | `src/data/profile.ts` |
+| Chapter words drawn in particles | `src/lib/titles.ts` |
+| Camera framing and scene mood per chapter | `FRAMES` in `src/three/World.tsx` |
+| The beach scene (sky, sea, surf, props, dolphins) | `src/three/Sea.tsx` |
+| Scene switch state (sky / water) | `src/lib/scene.ts` |
+| Shaders (terrain, stars, aurora, titles, beach, surf, props) | `src/three/shaders.ts` |
+| Soundscape | `src/lib/sound.ts` |
+| Colours and fonts | CSS variables at the top of `src/styles.css` |
+| Résumé PDF | `public/Rajkumar-S-Resume.pdf` |
+| Social preview image | `public/og.jpg` (1200×630) |
 
-**Use GitHub Codespaces**
+## Deploy
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Pushing to `main` runs `.github/workflows/static.yml`, which builds with Node 20 (20.19 or newer) and publishes `dist/` to GitHub Pages. The custom domain comes from `CNAME`.
