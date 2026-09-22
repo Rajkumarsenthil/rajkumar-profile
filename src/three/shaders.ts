@@ -547,12 +547,43 @@ uniform float uShore;
 uniform vec3 uSunDir;
 uniform vec4 uUmbrella; // x, z, canopy radius, height
 uniform vec4 uBoard;    // x, z, length, lean
+uniform vec3 uTowel;    // x, z, angle
+uniform vec4 uPalmA[4]; // trunk base x, z; crown shadow centre x, z
+uniform vec4 uPalmB[4]; // crown shadow radius, trunk width, sway phase
+uniform vec4 uBlobs[8]; // soft contact shadows: x, z, radius x, radius z
 varying vec3 vWorld;
 ${NOISE}
 ${SURF}
 
 float ellipse(vec2 p, vec2 r) {
   return length(p / r);
+}
+
+/** The shadow of a palm: a thin trunk line and a crown of feathery fronds that sway. */
+float palmShadow(vec2 xz, vec4 a, vec4 b) {
+  vec2 pa = xz - a.xy;
+  vec2 ba = a.zw - a.xy;
+  float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+  float width = b.y * mix(1.0, 0.55, h);
+  float trunk = 1.0 - smoothstep(width * 0.5, width * 0.5 + 0.08, length(pa - ba * h));
+  trunk *= step(0.02, h);
+
+  vec2 q = xz - a.zw;
+  float sway = sin(uTime * 1.05 + b.z) * 0.5 + sin(uTime * 2.3 + b.z * 1.7) * 0.2;
+  q += vec2(0.25, -0.1) * sway;
+  float r = length(q) / b.x;
+  float angle = atan(q.y, q.x) + sway * 0.03;
+  float fronds = 14.0;
+  float sector = angle / 6.28318 * fronds;
+  float id = floor(sector);
+  float reach = 0.7 + 0.3 * hash21(vec2(id, b.z));
+  float across = abs(fract(sector) - 0.5) * 6.28318 / fronds * r * b.x;
+  float serrate = 0.72 + 0.28 * step(0.45, fract(r * b.x * 5.5 + id * 0.37));
+  float half_ = 0.36 * sin(3.14159 * clamp(r / reach, 0.0, 1.0)) * serrate + 0.03;
+  float frond = (1.0 - smoothstep(half_ - 0.05, half_ + 0.05, across)) * step(r, reach);
+  float hub = 1.0 - smoothstep(0.1, 0.2, r);
+  float dapple = 0.82 + 0.18 * vnoise(xz * 3.0 + uTime * 0.3);
+  return max(trunk * 0.9, max(frond, hub) * 0.8 * dapple);
 }
 
 void main() {
@@ -625,9 +656,15 @@ void main() {
     }
   }
 
-  // Beach towel under the umbrella: soft blue and white stripes.
-  vec2 towel = vec2(vWorld.x - (uUmbrella.x + 0.6), vWorld.z - (uUmbrella.y + 0.4));
-  towel = mat2(0.96, -0.28, 0.28, 0.96) * towel;
+  // A dry line of seaweed, twigs and bits of shell left at the last high tide.
+  float wrackBand = exp(-pow((vWorld.z - (highWater + 0.9 + sin(vWorld.x * 0.21) * 0.35)) / 0.32, 2.0));
+  float wrack = smoothstep(0.58, 0.8, vnoise(vec2(vWorld.x * 2.4, vWorld.z * 7.0))) * wrackBand;
+  wrack *= step(0.3, vnoise(vec2(vWorld.x * 0.35, 4.0)));
+  sand = mix(sand, mix(vec3(0.3, 0.26, 0.14), vec3(0.18, 0.2, 0.1), vnoise(xz * 12.0)), wrack * 0.75);
+
+  // A beach towel spread on the sand: soft blue and white stripes.
+  vec2 towel = vec2(vWorld.x - uTowel.x, vWorld.z - uTowel.y);
+  towel = mat2(cos(uTowel.z), -sin(uTowel.z), sin(uTowel.z), cos(uTowel.z)) * towel;
   float onTowel = step(abs(towel.x), 0.55) * step(abs(towel.y), 1.0);
   vec3 towelColor = mix(vec3(0.95, 0.95, 0.92), vec3(0.16, 0.42, 0.72), step(0.5, fract(towel.y * 2.2)));
   towelColor *= 0.92 + 0.08 * vnoise(towel * 14.0);
@@ -640,7 +677,14 @@ void main() {
   vec2 bq = xz - (uBoard.xy + boardDir * uBoard.z * 0.55);
   bq = vec2(dot(bq, boardDir), dot(bq, vec2(-boardDir.y, boardDir.x)));
   float boardShadow = 1.0 - smoothstep(0.8, 1.1, ellipse(bq, vec2(uBoard.z * 0.55, 0.16)));
-  sand *= 1.0 - (umbrellaShadow * 0.38 + boardShadow * 0.3) * step(uShore + 1.0, vWorld.z);
+  float shade = max(umbrellaShadow * 0.38, boardShadow * 0.3);
+  for (int i = 0; i < 4; i++) shade = max(shade, palmShadow(xz, uPalmA[i], uPalmB[i]) * 0.4);
+  for (int i = 0; i < 8; i++) {
+    vec4 blob = uBlobs[i];
+    shade = max(shade, (1.0 - smoothstep(0.55, 1.0, ellipse(xz - blob.xy, blob.zw))) * 0.34);
+  }
+  // Shadows on sand are lit by the blue sky, so they read cool rather than grey.
+  sand *= mix(vec3(1.0), vec3(0.64, 0.68, 0.8), shade / 0.4 * 0.95 * step(uShore + 1.0, vWorld.z));
 
   // Shallow water sheet between the sea and the running front.
   float sheet = smoothstep(front + 0.25, front - 0.35, vWorld.z);
@@ -691,19 +735,26 @@ void main() {
   float foam = 0.0;
   float crest = 0.0;
   for (int k = 0; k < 3; k++) {
-    float center = mod(float(k) * SURF_SPACING - uTime * SURF_SPEED, SURF_RANGE) + bend * smoothstep(SURF_RANGE, 20.0, D);
+    // Each wave's life runs from the back of the set (72 m out) to the beach (0). The
+    // crest line bends along the shore, so fade on life rather than distance: a wave
+    // then never vanishes mid-swell when it recycles, wherever it is along the beach.
+    float life = mod(float(k) * SURF_SPACING - uTime * SURF_SPEED, SURF_RANGE);
+    float lifeFade = smoothstep(0.0, 8.0, life) * smoothstep(SURF_RANGE, SURF_RANGE - 8.0, life);
+    float center = life + bend * smoothstep(SURF_RANGE, 20.0, D);
     float dd = D - center;
     float width = dd < 0.0 ? 1.5 : 5.5;
     float shape = exp(-(dd * dd) / (width * width));
-    float a = amplitude(center);
+    float a = amplitude(center) * lifeFade;
     h += a * shape;
     crest = max(crest, shape * a);
     // Each wave breaks in sections along its length, not as one straight line.
     float wave = floor((uTime * SURF_SPEED - float(k) * SURF_SPACING) / SURF_RANGE) * 3.0 + float(k);
     float sections = smoothstep(0.38, 0.62, vnoise(vec2(p.x * 0.035, wave * 7.3)));
-    float breaking = smoothstep(22.0, 14.0, center) * sections;
+    // Whitewater dies away as the wave runs out of water at the beach.
+    float spent = lifeFade * smoothstep(0.5, 7.0, center);
+    float breaking = smoothstep(22.0, 14.0, center) * sections * spent;
     foam += breaking * (smoothstep(0.55, 0.0, abs(dd + 0.4)) + smoothstep(-0.5, 0.8, dd) * smoothstep(5.0, 0.8, dd) * 0.45);
-    foam += smoothstep(0.84, 0.98, shape) * smoothstep(30.0, 21.0, center) * 0.35 * sections;
+    foam += smoothstep(0.84, 0.98, shape) * smoothstep(30.0, 21.0, center) * 0.35 * sections * spent;
   }
   p.y = -3.97 + h;
   p.z += crest * 0.55;
@@ -761,16 +812,29 @@ void main() {
 }
 `;
 
-/** Lit props (umbrella, surfboard, dolphins, surfer): lambert, sky fill and a wet highlight. Linear light. */
+/**
+ * Lit props (umbrella, loungers, tower, surfer, dolphins, gulls...): lambert, sky fill
+ * and a wet highlight. Cloth (flags, kite tails) ripples in the wind. Linear light.
+ */
 export const propVertex = /* glsl */ `
+uniform float uTime;
+uniform vec4 uFlutter; // amplitude, wavenumber, speed, axis (0: flag along +x, 1: tail along -y)
 varying vec3 vNormalW;
 varying vec3 vWorld;
 varying vec3 vLocal;
 
 void main() {
   vLocal = position;
+  vec3 p = position;
+  if (uFlutter.x > 0.0) {
+    // Ripples travel away from the fixed edge and grow towards the free end.
+    float along = uFlutter.w < 0.5 ? p.x : -p.y;
+    float wave = sin(along * uFlutter.y - uTime * uFlutter.z) + 0.35 * sin(along * uFlutter.y * 2.3 - uTime * uFlutter.z * 1.7);
+    float bend = wave * uFlutter.x * along;
+    if (uFlutter.w < 0.5) p.z += bend; else p.x += bend;
+  }
   vNormalW = normalize(mat3(modelMatrix) * normal);
-  vec4 world = modelMatrix * vec4(position, 1.0);
+  vec4 world = modelMatrix * vec4(p, 1.0);
   vWorld = world.xyz;
   gl_Position = projectionMatrix * viewMatrix * world;
 }
@@ -779,18 +843,28 @@ void main() {
 export const propFragment = /* glsl */ `
 uniform vec3 uColor;
 uniform vec3 uColor2;
-uniform float uPattern; // 0 plain, 1 canopy stripes, 2 centre stripe, 3 dolphin countershading
+// 0 plain, 1 canopy stripes, 2 centre stripe, 3 dolphin countershading, 4 bark,
+// 5 fabric stripes, 6 gull wing tips, 7 beach ball, 8 packed sand, 9 two-band flag, 10 weathered wood
+uniform float uPattern;
 uniform float uStripes;
 uniform float uShine;
 uniform float uOpacity;
 uniform vec3 uSunDir;
+uniform vec4 uFlutter;
 varying vec3 vNormalW;
 varying vec3 vWorld;
 varying vec3 vLocal;
+${NOISE}
 
 void main() {
+  vec3 view = normalize(cameraPosition - vWorld);
   vec3 n = normalize(vNormalW);
   if (!gl_FrontFacing) n = -n;
+  if (uFlutter.x > 0.0) {
+    // Rippling cloth: shade from the displaced surface itself, facing the viewer.
+    n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+    if (dot(n, view) < 0.0) n = -n;
+  }
   vec3 base = uColor;
   if (uPattern > 0.5 && uPattern < 1.5) {
     float angle = atan(vLocal.z, vLocal.x) / 6.28318 + 0.5;
@@ -799,16 +873,47 @@ void main() {
     base = mix(uColor, uColor2, step(abs(vLocal.x), 0.045));
   } else if (uPattern > 2.5 && uPattern < 3.5) {
     base = mix(uColor2, uColor, smoothstep(-0.35, 0.45, n.y));
-  } else if (uPattern > 3.5) {
+  } else if (uPattern > 3.5 && uPattern < 4.5) {
     float wobble = sin(atan(vLocal.z, vLocal.x) * 3.0 + vLocal.y * 2.0) * 0.08;
     float ring = fract(vLocal.y * 4.2 + wobble);
     float fibres = 0.85 + 0.15 * sin(atan(vLocal.z, vLocal.x) * 40.0 + vLocal.y * 9.0);
     base = mix(uColor2, uColor, smoothstep(0.05, 0.3, ring) * (1.0 - smoothstep(0.8, 0.97, ring))) * fibres;
+  } else if (uPattern > 4.5 && uPattern < 5.5) {
+    // Woven fabric in lengthwise stripes.
+    base = mix(uColor, uColor2, step(0.5, fract(vLocal.x * uStripes + 0.25)));
+    base *= 0.94 + 0.06 * vnoise(vLocal.xz * 90.0);
+  } else if (uPattern > 5.5 && uPattern < 6.5) {
+    // Grey gull wing with black, white-spotted tips.
+    float tip = smoothstep(uStripes * 0.72, uStripes * 0.8, abs(vLocal.z));
+    base = mix(uColor, uColor2, tip);
+    base = mix(base, vec3(0.9), tip * step(uStripes * 0.93, abs(vLocal.z)));
+  } else if (uPattern > 6.5 && uPattern < 7.5) {
+    // Beach ball: six coloured gores with white caps.
+    float sector = floor((atan(vLocal.z, vLocal.x) / 6.28318 + 0.5) * 6.0);
+    vec3 gore = sector < 0.5 ? vec3(0.8, 0.08, 0.06)
+      : sector < 1.5 ? vec3(0.92, 0.9, 0.86)
+      : sector < 2.5 ? vec3(0.05, 0.28, 0.72)
+      : sector < 3.5 ? vec3(0.95, 0.72, 0.08)
+      : sector < 4.5 ? vec3(0.92, 0.9, 0.86)
+      : vec3(0.1, 0.55, 0.3);
+    base = mix(gore, vec3(0.94, 0.93, 0.9), step(uStripes * 0.88, abs(vLocal.y)));
+  } else if (uPattern > 7.5 && uPattern < 8.5) {
+    // Packed damp sand: grainy, with darker hand-patted patches.
+    float g = vnoise(vWorld.xz * 38.0 + vWorld.y * 21.0) * 0.6 + vnoise(vWorld.xy * 9.0 + vWorld.z * 5.0) * 0.4;
+    base = uColor * (0.84 + g * 0.26);
+  } else if (uPattern > 8.5 && uPattern < 9.5) {
+    // Two-band flag (red over yellow, like a lifeguard flag).
+    base = mix(uColor2, uColor, step(0.0, vLocal.y));
+  } else if (uPattern > 9.5) {
+    // Weathered, sun-bleached wood with grain along its length.
+    float grain = vnoise(vec2(vLocal.y * 3.0, (vLocal.x + vLocal.z) * 40.0));
+    base = mix(uColor2, uColor, 0.55 + grain * 0.45);
   }
   float diffuse = max(dot(n, uSunDir), 0.0);
   float sky = 0.5 + 0.5 * n.y;
   vec3 color = base * (vec3(1.1, 1.05, 0.95) * diffuse * 1.4 + vec3(0.42, 0.52, 0.66) * sky * 0.55);
-  vec3 view = normalize(cameraPosition - vWorld);
+  // Cloth lets a little sun through when lit from behind.
+  if (uFlutter.x > 0.0) color += base * vec3(0.9, 0.8, 0.6) * max(dot(-n, uSunDir), 0.0) * 0.5;
   vec3 h = normalize(uSunDir + view);
   color += vec3(1.2) * pow(max(dot(n, h), 0.0), 60.0) * uShine;
   gl_FragColor = vec4(color, uOpacity);

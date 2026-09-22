@@ -17,21 +17,24 @@ export function SectionHeading({ index, eyebrow, titleId, title, description }: 
   return (
     <div>
       <Reveal>
-        <p className="eyebrow flex items-center gap-3">
+        <p className="eyebrow text-chip flex w-fit items-center gap-3">
           <span className="text-accent">{index}</span>
           <span className="h-px w-10 bg-line-strong" />
           {eyebrow}
         </p>
       </Reveal>
       <TitleAnchor id={titleId} className="mt-4 h-[clamp(4.5rem,12vw,10.5rem)] w-full max-w-4xl" />
-      <h2 className="mt-3 max-w-3xl text-3xl font-medium leading-[1.06] tracking-[-0.03em] sm:text-4xl md:text-5xl">
-        <SplitText text={title} stagger={0.045} />
-      </h2>
-      {description && (
-        <Reveal delay={0.2}>
-          <p className="mt-6 max-w-2xl text-lg leading-relaxed text-fg-muted">{description}</p>
-        </Reveal>
-      )}
+      {/* With a description, heading and copy share a card so they stay legible over the beach. */}
+      <div className={description ? "text-card mt-3 max-w-3xl" : "mt-3 max-w-3xl"}>
+        <h2 className="text-3xl font-medium leading-[1.06] tracking-[-0.03em] sm:text-4xl md:text-5xl">
+          <SplitText text={title} stagger={0.045} />
+        </h2>
+        {description && (
+          <Reveal delay={0.2}>
+            <p className="mt-6 max-w-2xl text-lg leading-relaxed text-fg-muted">{description}</p>
+          </Reveal>
+        )}
+      </div>
     </div>
   );
 }

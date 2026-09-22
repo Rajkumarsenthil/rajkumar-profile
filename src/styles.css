@@ -4,6 +4,8 @@
 @import "@fontsource/instrument-serif/400-italic.css";
 @import "@fontsource-variable/geist/index.css";
 @import "@fontsource-variable/geist-mono/index.css";
+@import "@fontsource-variable/quicksand/index.css";
+@import "@fontsource/pacifico/400.css";
 
 /* ---------- Design tokens ---------- */
 /* Registered so they can animate: switching scenes glides every colour at once. */
@@ -127,6 +129,31 @@
   inherits: true;
   initial-value: transparent;
 }
+@property --card-top {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --card-bottom {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --card-edge {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --card-shadow {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --card-blur {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
 @property --grain {
   syntax: "<number>";
   inherits: true;
@@ -161,9 +188,15 @@
   --dialog-bg: rgb(7 9 15 / 0.94);
   --grain: 0.06;
   --cursor: #eef1f6;
+  /* Text cards are invisible at night: the words sit straight on the sky. */
+  --card-top: rgb(255 255 255 / 0);
+  --card-bottom: rgb(255 255 255 / 0);
+  --card-edge: rgb(255 255 255 / 0);
+  --card-shadow: rgb(0 0 0 / 0);
+  --card-blur: 0px;
   color-scheme: dark;
   /* Same length and easing as SCENE_BLEND_SECONDS in World.tsx. */
-  transition: --bg 2.4s cubic-bezier(0.65, 0, 0.35, 1), --surface 2.4s cubic-bezier(0.65, 0, 0.35, 1), --surface-2 2.4s cubic-bezier(0.65, 0, 0.35, 1), --fg 2.4s cubic-bezier(0.65, 0, 0.35, 1), --fg-muted 2.4s cubic-bezier(0.65, 0, 0.35, 1), --fg-faint 2.4s cubic-bezier(0.65, 0, 0.35, 1), --line 2.4s cubic-bezier(0.65, 0, 0.35, 1), --line-strong 2.4s cubic-bezier(0.65, 0, 0.35, 1), --accent 2.4s cubic-bezier(0.65, 0, 0.35, 1), --accent-soft 2.4s cubic-bezier(0.65, 0, 0.35, 1), --accent-fg 2.4s cubic-bezier(0.65, 0, 0.35, 1), --violet 2.4s cubic-bezier(0.65, 0, 0.35, 1), --cool 2.4s cubic-bezier(0.65, 0, 0.35, 1), --tint 2.4s cubic-bezier(0.65, 0, 0.35, 1), --well 2.4s cubic-bezier(0.65, 0, 0.35, 1), --glass-top 2.4s cubic-bezier(0.65, 0, 0.35, 1), --glass-bottom 2.4s cubic-bezier(0.65, 0, 0.35, 1), --glass-base 2.4s cubic-bezier(0.65, 0, 0.35, 1), --fade 2.4s cubic-bezier(0.65, 0, 0.35, 1), --dialog-bg 2.4s cubic-bezier(0.65, 0, 0.35, 1), --cursor 2.4s cubic-bezier(0.65, 0, 0.35, 1), --aurora-a 2.4s cubic-bezier(0.65, 0, 0.35, 1), --aurora-b 2.4s cubic-bezier(0.65, 0, 0.35, 1), --aurora-c 2.4s cubic-bezier(0.65, 0, 0.35, 1), --grain 2.4s cubic-bezier(0.65, 0, 0.35, 1);
+  transition: --bg 2.4s cubic-bezier(0.65, 0, 0.35, 1), --surface 2.4s cubic-bezier(0.65, 0, 0.35, 1), --surface-2 2.4s cubic-bezier(0.65, 0, 0.35, 1), --fg 2.4s cubic-bezier(0.65, 0, 0.35, 1), --fg-muted 2.4s cubic-bezier(0.65, 0, 0.35, 1), --fg-faint 2.4s cubic-bezier(0.65, 0, 0.35, 1), --line 2.4s cubic-bezier(0.65, 0, 0.35, 1), --line-strong 2.4s cubic-bezier(0.65, 0, 0.35, 1), --accent 2.4s cubic-bezier(0.65, 0, 0.35, 1), --accent-soft 2.4s cubic-bezier(0.65, 0, 0.35, 1), --accent-fg 2.4s cubic-bezier(0.65, 0, 0.35, 1), --violet 2.4s cubic-bezier(0.65, 0, 0.35, 1), --cool 2.4s cubic-bezier(0.65, 0, 0.35, 1), --tint 2.4s cubic-bezier(0.65, 0, 0.35, 1), --well 2.4s cubic-bezier(0.65, 0, 0.35, 1), --glass-top 2.4s cubic-bezier(0.65, 0, 0.35, 1), --glass-bottom 2.4s cubic-bezier(0.65, 0, 0.35, 1), --glass-base 2.4s cubic-bezier(0.65, 0, 0.35, 1), --fade 2.4s cubic-bezier(0.65, 0, 0.35, 1), --dialog-bg 2.4s cubic-bezier(0.65, 0, 0.35, 1), --cursor 2.4s cubic-bezier(0.65, 0, 0.35, 1), --aurora-a 2.4s cubic-bezier(0.65, 0, 0.35, 1), --aurora-b 2.4s cubic-bezier(0.65, 0, 0.35, 1), --aurora-c 2.4s cubic-bezier(0.65, 0, 0.35, 1), --card-top 2.4s cubic-bezier(0.65, 0, 0.35, 1), --card-bottom 2.4s cubic-bezier(0.65, 0, 0.35, 1), --card-edge 2.4s cubic-bezier(0.65, 0, 0.35, 1), --card-shadow 2.4s cubic-bezier(0.65, 0, 0.35, 1), --card-blur 2.4s cubic-bezier(0.65, 0, 0.35, 1), --grain 2.4s cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 /* Water: a bright beach day. Text stays neutral and dark, with a deep coral accent,
@@ -194,15 +227,41 @@
   --dialog-bg: rgb(250 248 244 / 0.97);
   --grain: 0.03;
   --cursor: #16181c;
+  /* Frosted, sun-bleached cards so long copy stays crisp over the sea. */
+  --card-top: rgb(255 252 246 / 0.66);
+  --card-bottom: rgb(250 244 234 / 0.46);
+  --card-edge: rgb(255 255 255 / 0.7);
+  --card-shadow: rgb(70 48 24 / 0.4);
+  --card-blur: 14px;
   color-scheme: light;
+}
+
+/* Beach type: a rounded, sunny sans with a surf-script accent. Swapped in half way
+   through the scene blend (see scene.ts) so the change hides inside the fade. */
+:root[data-type="beach"] body {
+  font-family: "Quicksand Variable", "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 500;
+  font-feature-settings: normal;
+}
+
+:root[data-type="beach"] body .font-medium {
+  font-weight: 600;
+}
+
+:root[data-type="beach"] body .font-serif {
+  font-family: "Pacifico", "Instrument Serif", cursive;
+  font-style: normal;
+  font-synthesis: none;
+  font-size: 0.86em;
+  letter-spacing: 0;
 }
 
 /* A soft light halo keeps text legible where it sits straight on the sea and sky. */
 :root[data-scene="water"] main :is(h1, h2, h3, p, li, dt, dd, span, a) {
-  text-shadow: 0 1px 14px rgb(255 255 255 / 0.7), 0 0 2px rgb(255 255 255 / 0.5);
+  text-shadow: 0 0 1px rgb(255 255 255 / 0.6), 0 1px 8px rgb(255 255 255 / 0.55);
 }
 
-:root[data-scene="water"] main :is(.text-aurora, .glass *, .glass, .btn-primary, .btn-primary *) {
+:root[data-scene="water"] main :is(.text-aurora, .glass *, .glass, .text-card, .text-card *, .text-chip, .text-chip *, .btn-primary, .btn-primary *) {
   text-shadow: none;
 }
 
@@ -307,6 +366,52 @@
     border: 1px solid var(--line);
     backdrop-filter: blur(16px) saturate(140%);
     -webkit-backdrop-filter: blur(16px) saturate(140%);
+  }
+
+  /* Long copy over the scene: invisible at night, frosted glass by day. The negative
+     start margin keeps the words aligned with the column; the far edge stays inside
+     it, so neighbouring cards keep their gap. */
+  .text-card {
+    margin-inline-start: -1rem;
+    padding: 1.25rem 1rem;
+    border-radius: 1.5rem;
+    background: linear-gradient(165deg, var(--card-top), var(--card-bottom));
+    border: 1px solid var(--card-edge);
+    box-shadow: 0 30px 80px -40px var(--card-shadow);
+    backdrop-filter: blur(var(--card-blur)) saturate(1.12);
+    -webkit-backdrop-filter: blur(var(--card-blur)) saturate(1.12);
+  }
+
+  @media (min-width: 768px) {
+    .text-card {
+      margin-inline-start: -2.5rem;
+      padding: 2.1rem 2.5rem 2.3rem;
+      border-radius: 2rem;
+    }
+  }
+
+  /* A small label on the same card: a frosted pill by day, bare text at night. */
+  .text-chip {
+    margin-inline-start: -0.9rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 999px;
+    background: linear-gradient(165deg, var(--card-top), var(--card-bottom));
+    border: 1px solid var(--card-edge);
+    box-shadow: 0 12px 30px -18px var(--card-shadow);
+    backdrop-filter: blur(var(--card-blur)) saturate(1.12);
+    -webkit-backdrop-filter: blur(var(--card-blur)) saturate(1.12);
+  }
+
+  :root[data-scene="water"] .text-chip {
+    color: var(--fg);
+  }
+
+  /* The nav before any scrolling: bare at night, frosted over the bright beach. */
+  .nav-rest {
+    border-color: var(--card-edge);
+    background: linear-gradient(165deg, var(--card-top), var(--card-bottom));
+    backdrop-filter: blur(var(--card-blur)) saturate(1.12);
+    -webkit-backdrop-filter: blur(var(--card-blur)) saturate(1.12);
   }
 
   /* Cursor-following glow and border highlight; --mx/--my are set from App. */

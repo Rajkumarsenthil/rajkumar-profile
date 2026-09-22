@@ -73,7 +73,7 @@ export function Nav({ ready }: { ready: boolean }) {
         <nav
           aria-label="Primary"
           className={`pointer-events-auto flex items-center justify-between rounded-full border py-2 pl-3 pr-2 transition-[background-color,border-color] duration-500 ${
-            scrolled || open ? "border-line bg-bg/60 backdrop-blur-xl" : "border-transparent"
+            scrolled || open ? "border-line bg-bg/60 backdrop-blur-xl" : "nav-rest"
           }`}
         >
           <a href="#top" className="flex items-center gap-3" aria-label="Back to top">

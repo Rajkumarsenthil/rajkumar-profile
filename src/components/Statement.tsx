@@ -15,13 +15,13 @@ export function Statement() {
   return (
     <section id="statement" className="py-32 md:py-48">
       <div className="container-x">
-        <p className="eyebrow flex items-center gap-3">
+        <p className="eyebrow text-chip flex w-fit items-center gap-3">
           <span className="h-px w-10 bg-line-strong" />
           What I do
         </p>
         <p
           ref={ref}
-          className="mt-8 max-w-5xl text-[clamp(1.75rem,4.1vw,3.6rem)] font-medium leading-[1.14] tracking-[-0.03em]"
+          className="text-card mt-8 max-w-[62rem] text-[clamp(1.45rem,2.85vw,2.5rem)] font-medium leading-[1.24] tracking-[-0.02em]"
         >
           {words.map((word, i) => (
             <Word

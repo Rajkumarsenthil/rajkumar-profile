@@ -23,7 +23,7 @@ export function Contact() {
     <section id="contact" className="relative flex min-h-svh flex-col justify-center py-28 md:py-40">
       <div className="container-x">
         <Reveal>
-          <p className="eyebrow flex items-center justify-center gap-3">
+          <p className="eyebrow text-chip mx-auto flex w-fit items-center justify-center gap-3">
             <span className="text-accent">05</span>
             <span className="h-px w-10 bg-line-strong" />
             Contact

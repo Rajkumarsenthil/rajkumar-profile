@@ -22,6 +22,11 @@ const read = (): SceneMode => {
 
 let current: SceneMode = read();
 const listeners = new Set<() => void>();
+let typeSwap: ReturnType<typeof setTimeout> | undefined;
+
+/** Typefaces change at the midpoint of the 2.4 s blend, where the fade best hides the swap. */
+const TYPE_SWAP_MS = 1200;
+const typeFor = (mode: SceneMode) => (mode === "water" ? "beach" : "night");
 
 export const getScene = () => current;
 
@@ -36,6 +41,10 @@ function apply(next: SceneMode) {
   current = next;
   const root = document.documentElement;
   root.dataset.scene = next;
+  clearTimeout(typeSwap);
+  typeSwap = setTimeout(() => {
+    root.dataset.type = typeFor(next);
+  }, TYPE_SWAP_MS);
   root.style.background = THEME_COLORS[next];
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLORS[next]);
   try {
@@ -56,5 +65,6 @@ export function setScene(next: SceneMode) {
   apply(next);
 }
 
-// Keep the audio mood in step with a scene restored from a previous visit.
+// Keep the audio mood and typefaces in step with a scene restored from a previous visit.
 sound.setMood(current);
+if (typeof document !== "undefined") document.documentElement.dataset.type = typeFor(current);

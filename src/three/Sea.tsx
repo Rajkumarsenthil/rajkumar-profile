@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { Water } from "three/examples/jsm/objects/Water.js";
 import { makeWaterNormals } from "./DayGrade";
+import { NO_REFLECTION } from "./layers";
 import {
   beachFragment,
   beachVertex,
@@ -25,8 +26,11 @@ import {
 
 /**
  * The water scene: a beach by day. Physically based sky and reflective sea
- * (three.js Sky and Water), a surf zone of breaking waves with a surfer, a
- * detailed beach with props, dolphins, distant sailboats and gulls.
+ * (three.js Sky and Water), a surf zone of breaking waves, a paddleboarder out
+ * beyond the break, and a lived-in beach: palms and dune grass in the breeze, loungers under
+ * an umbrella, a lifeguard tower with its flag flying, a sandcastle, a kite,
+ * gulls wheeling overhead, dolphins, distant sailboats. The name floats over the
+ * shoreline in the opening shot, so everything tall stays below or beside it.
  * Everything here outputs linear light and is finished by the DayGrade pass.
  */
 
@@ -79,6 +83,8 @@ type PropLook = {
   pattern?: number;
   stripes?: number;
   shine?: number;
+  /** Cloth ripple: amplitude, wavenumber, speed, axis (0 flag along +x, 1 tail along -y). */
+  flutter?: [number, number, number, number];
 };
 
 function usePropUniforms(look: PropLook) {
@@ -91,11 +97,19 @@ function usePropUniforms(look: PropLook) {
       uShine: { value: look.shine ?? 0.15 },
       uOpacity: { value: 0 },
       uSunDir: { value: SUN_DIR.clone() },
+      uTime: { value: 0 },
+      uFlutter: { value: new THREE.Vector4(...(look.flutter ?? [0, 0, 0, 0])) },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 }
+
+type PropPlacement = {
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  scale?: number | [number, number, number];
+};
 
 /** A lit mesh whose opacity follows the scene fade. */
 function Prop({
@@ -105,18 +119,14 @@ function Prop({
   position,
   rotation,
   scale,
-}: {
-  geometry: THREE.BufferGeometry;
-  look: PropLook;
-  day: DayRef;
-  position?: [number, number, number];
-  rotation?: [number, number, number];
-  scale?: number | [number, number, number];
-}) {
+}: PropPlacement & { geometry: THREE.BufferGeometry; look: PropLook; day: DayRef }) {
   const material = useRef<THREE.ShaderMaterial>(null);
   const uniforms = usePropUniforms(look);
-  useFrame(() => {
-    if (material.current) material.current.uniforms.uOpacity.value = day.current;
+  useFrame((state) => {
+    const m = material.current;
+    if (!m) return;
+    m.uniforms.uOpacity.value = day.current;
+    m.uniforms.uTime.value = state.clock.elapsedTime;
   });
   return (
     <mesh geometry={geometry} position={position} rotation={rotation} scale={scale} frustumCulled={false}>
@@ -132,13 +142,172 @@ function Prop({
   );
 }
 
-const UMBRELLA = { x: -5.6, z: -16.4, radius: 1.55, height: 2.35 };
-const BOARD = { x: 4.6, z: -17.6, length: 2.1 };
+/** Shared unit geometries, scaled per use, so dozens of parts cost a handful of buffers. */
+function useKit() {
+  const box = useDisposable(() => new THREE.BoxGeometry(1, 1, 1));
+  const cylinder = useDisposable(() => new THREE.CylinderGeometry(1, 1, 1, 14));
+  const sphere = useDisposable(() => new THREE.SphereGeometry(1, 20, 14));
+  return { box, cylinder, sphere };
+}
+
+type Kit = ReturnType<typeof useKit>;
+
+/** A box-shaped part: size in metres, placed in its parent's frame. */
+function Block({ kit, look, day, size, at, rotation }: { kit: Kit; look: PropLook; day: DayRef; size: [number, number, number]; at: [number, number, number]; rotation?: [number, number, number] }) {
+  return <Prop geometry={kit.box} look={look} day={day} position={at} rotation={rotation} scale={size} />;
+}
+
+/* Where things stand on the beach (x, z). Everything tall sits below or beside the
+   name in the opening drone shot, and frames the text in the eye-level views. */
+const UMBRELLA = { x: -6.5, z: -16, radius: 1.55, height: 2.35 };
+const BOARD = { x: 10.2, z: -15.6, length: 2.1 };
+const LOUNGERS = [
+  { x: -8.1, z: -14.3, yaw: 0.14 },
+  { x: -5.9, z: -13.9, yaw: -0.06 },
+];
+const COOLER = { x: -4.5, z: -15.2, yaw: 0.4 };
+const TOWEL = { x: -3.3, z: -16.9, angle: 0.35 };
+const BALL = { x: 1.6, z: -17.3, radius: 0.28 };
+const CASTLE = { x: 4.4, z: -17.1 };
+const DRIFTWOOD = { x: 7.6, z: -16.9, yaw: 0.35 };
+const TOWER = { x: -15.5, z: -19.5, yaw: 0.28 };
+
+/** Direction shadows fall across the sand (away from the sun). */
+const AWAY = new THREE.Vector2(-SUN_DIR.x, -SUN_DIR.z).normalize();
+
+const WOOD: PropLook = { color: [0.55, 0.37, 0.22], color2: [0.36, 0.23, 0.13], pattern: 10, shine: 0.12 };
+const PAINTED: PropLook = { color: [0.86, 0.84, 0.79], color2: [0.7, 0.67, 0.61], pattern: 10, shine: 0.08 };
+const SAND: PropLook = { color: [0.8, 0.64, 0.42], pattern: 8, shine: 0.02 };
+
+/** A wooden sun lounger with a striped cushion, head end towards the land so it faces the sea. */
+function Lounger({ kit, day, x, z, yaw }: { kit: Kit; day: DayRef; x: number; z: number; yaw: number }) {
+  const cushion: PropLook = { color: [0.05, 0.13, 0.3], color2: [0.9, 0.88, 0.82], pattern: 5, stripes: 3.5, shine: 0.04 };
+  const back = -0.9;
+  const backAt: [number, number, number] = [0, 0.33 + Math.sin(-back) * 0.39, 0.33 + Math.cos(back) * 0.39];
+  const normal = [0, Math.cos(back), Math.sin(back)];
+  return (
+    <group position={[x, sandY(z) - 0.02, z]} rotation={[0, yaw, 0]}>
+      {[-0.3, 0.3].map((side) => (
+        <Block key={side} kit={kit} look={WOOD} day={day} size={[0.05, 0.06, 1.9]} at={[side, 0.3, 0]} />
+      ))}
+      {[-0.3, 0.3].flatMap((side) =>
+        [-0.86, 0.86].map((end) => <Block key={`${side}${end}`} kit={kit} look={WOOD} day={day} size={[0.05, 0.3, 0.05]} at={[side, 0.15, end]} />),
+      )}
+      <Block kit={kit} look={WOOD} day={day} size={[0.6, 0.035, 1.25]} at={[0, 0.33, -0.3]} />
+      <Block kit={kit} look={WOOD} day={day} size={[0.6, 0.035, 0.78]} at={backAt} rotation={[back, 0, 0]} />
+      <Block kit={kit} look={cushion} day={day} size={[0.56, 0.07, 1.2]} at={[0, 0.385, -0.32]} />
+      <Block
+        kit={kit}
+        look={cushion}
+        day={day}
+        size={[0.56, 0.07, 0.74]}
+        at={[backAt[0], backAt[1] + normal[1] * 0.05, backAt[2] + normal[2] * 0.05]}
+        rotation={[back, 0, 0]}
+      />
+    </group>
+  );
+}
+
+/** Lifeguard tower on stilts: a painted hut with windows all round, a ramp to the sand and a flag. */
+function LifeguardTower({ kit, day }: { kit: Kit; day: DayRef }) {
+  const roof = useDisposable(() => new THREE.ConeGeometry(1.25, 0.55, 4, 1));
+  const flag = useDisposable(() => {
+    const g = new THREE.PlaneGeometry(0.95, 0.6, 18, 4);
+    g.translate(0.475, 0, 0);
+    return g;
+  });
+  const glass: PropLook = { color: [0.05, 0.08, 0.11], shine: 0.9 };
+  const hut: PropLook = { color: [0.8, 0.87, 0.9], color2: [0.66, 0.74, 0.78], pattern: 10, shine: 0.1 };
+  const top = 2.4;
+  return (
+    <group position={[TOWER.x, sandY(TOWER.z) - 0.05, TOWER.z]} rotation={[0, TOWER.yaw, 0]}>
+      {[-0.75, 0.75].flatMap((x) =>
+        [-0.75, 0.75].map((z) => <Block key={`${x}${z}`} kit={kit} look={PAINTED} day={day} size={[0.13, top, 0.13]} at={[x, top / 2, z]} />),
+      )}
+      {[-0.75, 0.75].map((z) => (
+        <Block key={`b${z}`} kit={kit} look={PAINTED} day={day} size={[1.5, 0.08, 0.08]} at={[0, 0.9, z]} />
+      ))}
+      {[-0.75, 0.75].map((x) => (
+        <Block key={`s${x}`} kit={kit} look={PAINTED} day={day} size={[0.08, 0.08, 1.5]} at={[x, 0.9, 0]} />
+      ))}
+      <Block kit={kit} look={PAINTED} day={day} size={[2.0, 0.12, 2.0]} at={[0, top, 0]} />
+      <Block kit={kit} look={hut} day={day} size={[1.55, 1.3, 1.35]} at={[0, top + 0.71, 0.1]} />
+      {[-1, 1].map((side) => (
+        <Block key={`w${side}`} kit={kit} look={glass} day={day} size={[1.2, 0.48, 0.02]} at={[0, top + 0.95, 0.1 + side * 0.68]} />
+      ))}
+      {[-1, 1].map((side) => (
+        <Block key={`v${side}`} kit={kit} look={glass} day={day} size={[0.02, 0.48, 0.95]} at={[side * 0.78, top + 0.95, 0.1]} />
+      ))}
+      <Prop geometry={roof} look={{ color: [0.7, 0.14, 0.08], shine: 0.2 }} day={day} position={[0, top + 1.36 + 0.27, 0.1]} rotation={[0, Math.PI / 4, 0]} />
+      {/* Railing round the sea side of the deck. */}
+      {[-0.97, 0.97].map((x) => (
+        <Block key={`p${x}`} kit={kit} look={PAINTED} day={day} size={[0.05, 0.62, 0.05]} at={[x, top + 0.34, -0.97]} />
+      ))}
+      <Block kit={kit} look={PAINTED} day={day} size={[2.0, 0.05, 0.05]} at={[0, top + 0.62, -0.97]} />
+      {/* Ramp down to the sand on the land side. */}
+      <Block kit={kit} look={PAINTED} day={day} size={[0.75, 0.07, 3.3]} at={[0.35, top / 2, 1.0 + 1.15]} rotation={[0.806, 0, 0]} />
+      <Prop geometry={kit.cylinder} look={{ color: [0.75, 0.75, 0.74], shine: 0.5 }} day={day} position={[0.72, top + 2.2, -0.45]} scale={[0.028, 1.7, 0.028]} />
+      <Prop
+        geometry={flag}
+        look={{ color: [0.8, 0.07, 0.05], color2: [0.97, 0.78, 0.08], pattern: 9, shine: 0.05, flutter: [0.1, 5.5, 7.5, 0] }}
+        day={day}
+        position={[0.75, top + 2.72, -0.45]}
+        rotation={[0, 0.5, 0]}
+      />
+    </group>
+  );
+}
+
+/** A sandcastle with turrets and a little flag, and the bucket and spade that built it. */
+function Sandcastle({ kit, day }: { kit: Kit; day: DayRef }) {
+  const mound = useDisposable(() => new THREE.CylinderGeometry(0.5, 0.64, 0.22, 24));
+  const keep = useDisposable(() => new THREE.CylinderGeometry(0.2, 0.24, 0.42, 18));
+  const turret = useDisposable(() => new THREE.CylinderGeometry(0.1, 0.125, 0.26, 14));
+  const spire = useDisposable(() => new THREE.ConeGeometry(0.12, 0.15, 14));
+  const bucket = useDisposable(() => new THREE.CylinderGeometry(0.17, 0.13, 0.27, 22, 1, true));
+  const flag = useDisposable(() => {
+    const g = new THREE.PlaneGeometry(0.17, 0.1, 8, 2);
+    g.translate(0.085, 0, 0);
+    return g;
+  });
+  const y = sandY(CASTLE.z);
+  const turrets: [number, number][] = [
+    [0.36, 0.1],
+    [-0.3, 0.22],
+    [0.05, -0.38],
+  ];
+  return (
+    <group position={[CASTLE.x, y, CASTLE.z]} rotation={[0, 0.3, 0]}>
+      <Prop geometry={mound} look={SAND} day={day} position={[0, 0.06, 0]} />
+      <Prop geometry={keep} look={SAND} day={day} position={[0, 0.38, 0]} />
+      {Array.from({ length: 6 }, (_, i) => {
+        const a = (i / 6) * Math.PI * 2;
+        return <Block key={i} kit={kit} look={SAND} day={day} size={[0.07, 0.08, 0.07]} at={[Math.cos(a) * 0.17, 0.63, Math.sin(a) * 0.17]} rotation={[0, -a, 0]} />;
+      })}
+      {turrets.map(([tx, tz]) => (
+        <group key={tx} position={[tx, 0.3, tz]}>
+          <Prop geometry={turret} look={SAND} day={day} />
+          <Prop geometry={spire} look={SAND} day={day} position={[0, 0.2, 0]} />
+        </group>
+      ))}
+      <Prop geometry={kit.cylinder} look={{ color: [0.6, 0.5, 0.4] }} day={day} position={[0, 0.8, 0]} scale={[0.007, 0.34, 0.007]} />
+      <Prop geometry={flag} look={{ color: [0.85, 0.2, 0.1], shine: 0.05, flutter: [0.18, 26, 9, 0] }} day={day} position={[0.008, 0.92, 0]} />
+      {/* The bucket lies tipped on its side; the spade beside it. */}
+      <Prop geometry={bucket} look={{ color: [0.82, 0.2, 0.09], shine: 0.5 }} day={day} position={[0.95, 0.15, 0.45]} rotation={[0.2, 0.6, Math.PI / 2]} />
+      <group position={[-0.85, 0.03, 0.55]} rotation={[0, -0.7, 0]}>
+        <Block kit={kit} look={{ color: [0.95, 0.74, 0.08], shine: 0.4 }} day={day} size={[0.035, 0.035, 0.42]} at={[0, 0, 0]} />
+        <Block kit={kit} look={{ color: [0.95, 0.74, 0.08], shine: 0.4 }} day={day} size={[0.17, 0.02, 0.19]} at={[0, 0, 0.29]} />
+      </group>
+    </group>
+  );
+}
 
 function BeachProps({ day }: { day: DayRef }) {
+  const kit = useKit();
   const pole = useDisposable(() => new THREE.CylinderGeometry(0.035, 0.035, UMBRELLA.height + 0.3, 8));
   const canopy = useDisposable(() => new THREE.ConeGeometry(UMBRELLA.radius, 0.55, 32, 1, true));
   const cap = useDisposable(() => new THREE.SphereGeometry(0.06, 12, 8));
+  const log = useDisposable(() => new THREE.CylinderGeometry(0.09, 0.15, 2.3, 12, 4));
   const board = useDisposable(() => {
     const shape = new THREE.Shape();
     shape.absellipse(0, 0, 0.27, BOARD.length / 2, 0, Math.PI * 2, false, 0);
@@ -148,6 +317,7 @@ function BeachProps({ day }: { day: DayRef }) {
   });
   const baseY = sandY(UMBRELLA.z);
   const boardY = sandY(BOARD.z);
+  const driftwood: PropLook = { color: [0.68, 0.62, 0.54], color2: [0.45, 0.4, 0.34], pattern: 10, shine: 0.05 };
   return (
     <group>
       <group position={[UMBRELLA.x, baseY, UMBRELLA.z]} rotation={[0.04, 0, -0.08]}>
@@ -160,6 +330,28 @@ function BeachProps({ day }: { day: DayRef }) {
         />
         <Prop geometry={cap} look={{ color: [0.86, 0.85, 0.82] }} day={day} position={[0, UMBRELLA.height + 0.29, 0]} />
       </group>
+      {LOUNGERS.map((l) => (
+        <Lounger key={l.x} kit={kit} day={day} x={l.x} z={l.z} yaw={l.yaw} />
+      ))}
+      <group position={[COOLER.x, sandY(COOLER.z), COOLER.z]} rotation={[0, COOLER.yaw, 0]}>
+        <Block kit={kit} look={{ color: [0.08, 0.32, 0.62], shine: 0.35 }} day={day} size={[0.6, 0.34, 0.38]} at={[0, 0.17, 0]} />
+        <Block kit={kit} look={{ color: [0.92, 0.92, 0.89], shine: 0.3 }} day={day} size={[0.63, 0.07, 0.41]} at={[0, 0.375, 0]} />
+        <Block kit={kit} look={{ color: [0.92, 0.92, 0.89], shine: 0.3 }} day={day} size={[0.34, 0.03, 0.05]} at={[0, 0.43, 0]} />
+      </group>
+      <Prop
+        geometry={kit.sphere}
+        look={{ color: [1, 1, 1], pattern: 7, stripes: 1, shine: 0.7 }}
+        day={day}
+        position={[BALL.x, sandY(BALL.z) + BALL.radius * 0.92, BALL.z]}
+        rotation={[0.35, 0.8, 0.25]}
+        scale={BALL.radius}
+      />
+      <Sandcastle kit={kit} day={day} />
+      <group position={[DRIFTWOOD.x, sandY(DRIFTWOOD.z) + 0.07, DRIFTWOOD.z]} rotation={[0, DRIFTWOOD.yaw, 0]}>
+        <Prop geometry={log} look={driftwood} day={day} rotation={[0, 0, Math.PI / 2]} />
+        <Prop geometry={kit.cylinder} look={driftwood} day={day} position={[0.45, 0.12, 0.22]} rotation={[0.9, 0.4, 1.1]} scale={[0.045, 0.75, 0.045]} />
+      </group>
+      <LifeguardTower kit={kit} day={day} />
       <Prop
         geometry={board}
         look={{ color: [0.86, 0.85, 0.8], color2: [0.02, 0.3, 0.4], pattern: 2, shine: 0.6 }}
@@ -172,6 +364,38 @@ function BeachProps({ day }: { day: DayRef }) {
 }
 
 /* ------------------------------------------------------------------ surf + beach */
+
+/** Ref callback: draw this object, but keep it out of the sea's reflection. */
+const skipReflection = (object: THREE.Object3D | null) => {
+  object?.layers.set(NO_REFLECTION);
+};
+
+/** Palm shadows for the sand shader: trunk base, where the crown's shadow lands, and its size. */
+function palmShadowUniforms() {
+  const a = PALMS.map((spec) => {
+    const crown = crownOf(spec);
+    const drop = crown.y - sandY(spec.z);
+    // Same shortened throw as the umbrella's shadow, so the beach reads as one light.
+    return new THREE.Vector4(spec.x, spec.z, crown.x + AWAY.x * drop * 0.9, crown.z + AWAY.y * drop * 0.9);
+  });
+  const b = PALMS.map((spec) => new THREE.Vector4(3.1 * spec.scale, 0.5 * spec.scale, spec.x * 1.3, 0));
+  return { uPalmA: { value: a }, uPalmB: { value: b } };
+}
+
+/** Soft contact shadows under the props, thrown a little away from the sun. */
+function contactShadows() {
+  const at = (x: number, z: number, height: number, rx: number, rz: number) =>
+    new THREE.Vector4(x + AWAY.x * height * 0.9, z + AWAY.y * height * 0.9, rx, rz);
+  return [
+    ...LOUNGERS.map((l) => at(l.x, l.z, 0.35, 0.45, 1.15)),
+    at(COOLER.x, COOLER.z, 0.2, 0.42, 0.34),
+    at(BALL.x, BALL.z, 0.25, 0.32, 0.28),
+    at(CASTLE.x, CASTLE.z, 0.3, 0.72, 0.64),
+    at(DRIFTWOOD.x, DRIFTWOOD.z, 0.08, 1.2, 0.3),
+    at(TOWER.x, TOWER.z, 1.2, 1.25, 1.15),
+    at(TOWER.x, TOWER.z, 3.1, 1.05, 1.0),
+  ];
+}
 
 function Beach({ day, reduce }: { day: DayRef; reduce: boolean }) {
   const material = useRef<THREE.ShaderMaterial>(null);
@@ -190,6 +414,9 @@ function Beach({ day, reduce }: { day: DayRef; reduce: boolean }) {
       uSunDir: { value: SUN_DIR.clone() },
       uUmbrella: { value: new THREE.Vector4(UMBRELLA.x, UMBRELLA.z, UMBRELLA.radius, UMBRELLA.height) },
       uBoard: { value: new THREE.Vector4(BOARD.x, BOARD.z, BOARD.length, 0.13) },
+      uTowel: { value: new THREE.Vector3(TOWEL.x, TOWEL.z, TOWEL.angle) },
+      ...palmShadowUniforms(),
+      uBlobs: { value: contactShadows() },
     }),
     [],
   );
@@ -200,7 +427,7 @@ function Beach({ day, reduce }: { day: DayRef; reduce: boolean }) {
     m.uniforms.uDay.value = day.current;
   });
   return (
-    <mesh geometry={geometry} frustumCulled={false} renderOrder={-4}>
+    <mesh geometry={geometry} frustumCulled={false} renderOrder={-4} ref={skipReflection}>
       <shaderMaterial ref={material} uniforms={uniforms} vertexShader={beachVertex} fragmentShader={beachFragment} transparent />
     </mesh>
   );
@@ -225,8 +452,20 @@ function Surf({ day, reduce }: { day: DayRef; reduce: boolean }) {
     m.uniforms.uDay.value = day.current;
   });
   return (
-    <mesh geometry={geometry} frustumCulled={false} renderOrder={-2}>
-      <shaderMaterial ref={material} uniforms={uniforms} vertexShader={surfVertex} fragmentShader={surfFragment} transparent />
+    <mesh geometry={geometry} frustumCulled={false} renderOrder={-2} ref={skipReflection}>
+      {/* A depth bias keeps the surf, a few centimetres above the sea plane, from
+          flickering against it in the distance as the camera moves. */}
+      <shaderMaterial
+        ref={material}
+        uniforms={uniforms}
+        vertexShader={surfVertex}
+        fragmentShader={surfFragment}
+        transparent
+        depthWrite={false}
+        polygonOffset
+        polygonOffsetFactor={-2}
+        polygonOffsetUnits={-4}
+      />
     </mesh>
   );
 }
@@ -525,15 +764,487 @@ function Gulls({ day, reduce }: { day: DayRef; reduce: boolean }) {
   );
 }
 
+/* ------------------------------------------------------------------ life: gulls, kite, surfer */
+
+function useGullParts() {
+  const body = useDisposable(() => {
+    const radii = [0, 0.03, 0.05, 0.058, 0.06, 0.055, 0.045, 0.032, 0.02, 0.01, 0];
+    const points = radii.map((r, i) => new THREE.Vector2(r, -0.26 + (i / (radii.length - 1)) * 0.5));
+    const g = new THREE.LatheGeometry(points, 14);
+    g.rotateZ(-Math.PI / 2);
+    g.scale(1, 0.85, 1);
+    return g;
+  });
+  const wing = useDisposable(() => {
+    // A long, swept gull wing; span runs along +z from the shoulder.
+    const s = new THREE.Shape();
+    s.moveTo(0.07, 0);
+    s.quadraticCurveTo(0.12, 0.28, 0.02, 0.5);
+    s.quadraticCurveTo(-0.04, 0.62, -0.12, 0.72);
+    s.quadraticCurveTo(-0.1, 0.56, -0.12, 0.42);
+    s.quadraticCurveTo(-0.1, 0.2, -0.09, 0);
+    s.closePath();
+    const g = new THREE.ShapeGeometry(s, 10);
+    g.rotateX(Math.PI / 2);
+    return g;
+  });
+  const tail = useDisposable(() => {
+    const s = new THREE.Shape();
+    s.moveTo(0, -0.05);
+    s.lineTo(-0.14, -0.07);
+    s.lineTo(-0.14, 0.07);
+    s.lineTo(0, 0.05);
+    s.closePath();
+    const g = new THREE.ShapeGeometry(s, 1);
+    g.rotateX(Math.PI / 2);
+    g.translate(-0.2, 0, 0);
+    return g;
+  });
+  const head = useDisposable(() => new THREE.SphereGeometry(0.045, 12, 8));
+  const beak = useDisposable(() => {
+    const g = new THREE.ConeGeometry(0.012, 0.06, 6);
+    g.rotateZ(-Math.PI / 2);
+    return g;
+  });
+  return { body, wing, tail, head, beak };
+}
+
+const GULL_WHITE: PropLook = { color: [0.9, 0.9, 0.88], shine: 0.1 };
+const GULL_WING: PropLook = { color: [0.5, 0.55, 0.6], color2: [0.03, 0.03, 0.035], pattern: 6, stripes: 0.72, shine: 0.05 };
+const SOARING = [
+  { radius: 11, speed: 0.2, height: 11, phase: 0, center: [-3, -30] as [number, number] },
+  { radius: 8, speed: -0.24, height: 13.5, phase: 2.1, center: [4, -34] as [number, number] },
+  { radius: 14, speed: 0.16, height: 9, phase: 4.2, center: [-6, -38] as [number, number] },
+];
+
+/** A few gulls wheeling over the beach: long glides, the odd burst of wingbeats, banking into the turn. */
+function SoaringGulls({ day, reduce }: { day: DayRef; reduce: boolean }) {
+  const parts = useGullParts();
+  const birds = useRef<Array<{ root: THREE.Group | null; left: THREE.Group | null; right: THREE.Group | null }>>(
+    SOARING.map(() => ({ root: null, left: null, right: null })),
+  );
+  useFrame((state) => {
+    const t = reduce ? 0 : state.clock.elapsedTime;
+    SOARING.forEach((spec, i) => {
+      const bird = birds.current[i];
+      if (!bird.root || !bird.left || !bird.right) return;
+      bird.root.visible = day.current > 0.01;
+      const angle = t * spec.speed + spec.phase;
+      const x = spec.center[0] + Math.cos(angle) * spec.radius;
+      const z = spec.center[1] + Math.sin(angle) * spec.radius;
+      const y = spec.height + Math.sin(t * 0.3 + spec.phase) * 1.4;
+      bird.root.position.set(x, y, z);
+      const vx = -Math.sin(angle) * spec.speed;
+      const vz = Math.cos(angle) * spec.speed;
+      const yaw = Math.atan2(-vz, vx);
+      const bank = Math.sign(spec.speed) * 0.32;
+      bird.root.rotation.set(bank, yaw, Math.sin(t * 0.3 + spec.phase) * 0.06, "YXZ");
+      // Mostly gliding; every so often a few strong wingbeats.
+      const burst = Math.max(0, Math.sin(t * 0.37 + i * 2.3) - 0.72) * 3.6;
+      const flap = Math.sin(t * 9 + i) * burst;
+      bird.right.rotation.x = -0.12 - flap * 0.55;
+      bird.left.rotation.x = 0.12 + flap * 0.55;
+    });
+  });
+  return (
+    <>
+      {SOARING.map((spec, i) => (
+        <group
+          key={spec.phase}
+          visible={false}
+          scale={1.05}
+          ref={(el) => {
+            birds.current[i].root = el;
+          }}
+        >
+          <Prop geometry={parts.body} look={GULL_WHITE} day={day} />
+          <Prop geometry={parts.head} look={GULL_WHITE} day={day} position={[0.22, 0.03, 0]} />
+          <Prop geometry={parts.beak} look={{ color: [0.9, 0.7, 0.12] }} day={day} position={[0.28, 0.025, 0]} />
+          <Prop geometry={parts.tail} look={GULL_WHITE} day={day} />
+          <group
+            position={[0.02, 0.02, 0.04]}
+            ref={(el) => {
+              birds.current[i].right = el;
+            }}
+          >
+            <Prop geometry={parts.wing} look={GULL_WING} day={day} />
+          </group>
+          <group
+            position={[0.02, 0.02, -0.04]}
+            scale={[1, 1, -1]}
+            ref={(el) => {
+              birds.current[i].left = el;
+            }}
+          >
+            <Prop geometry={parts.wing} look={GULL_WING} day={day} />
+          </group>
+        </group>
+      ))}
+    </>
+  );
+}
+
+const KITE = { x: 6, y: 14, z: -34 };
+/** The flyer stands behind the viewer, so the line runs in from the bottom of the frame. */
+const KITE_ANCHOR = new THREE.Vector3(3.5, -2.2, 5);
+
+/** A diamond kite swooping in lazy figure-eights on the sea breeze, its tail rippling. */
+function Kite({ day, reduce }: { day: DayRef; reduce: boolean }) {
+  const kite = useRef<THREE.Group>(null);
+  const halves = useDisposable(() => {
+    const g = new THREE.BufferGeometry();
+    // Left half then right half of the diamond, each its own colour group.
+    g.setAttribute("position", new THREE.Float32BufferAttribute([0, 0.75, 0, -0.45, 0.12, 0, 0, -0.55, 0], 3));
+    g.computeVertexNormals();
+    return g;
+  });
+  const right = useDisposable(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute([0, 0.75, 0, 0, -0.55, 0, 0.45, 0.12, 0], 3));
+    g.computeVertexNormals();
+    return g;
+  });
+  const tail = useDisposable(() => {
+    const g = new THREE.PlaneGeometry(0.07, 2.8, 1, 36);
+    g.translate(0, -1.4, 0);
+    return g;
+  });
+  const line = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(32 * 3), 3));
+    const m = new THREE.ShaderMaterial({
+      uniforms: { uColor: { value: new THREE.Vector3(0.3, 0.3, 0.32) }, uOpacity: { value: 0 }, uHaze: { value: 0.15 } },
+      vertexShader: flatVertex,
+      fragmentShader: flatFragment,
+      transparent: true,
+    });
+    const l = new THREE.Line(g, m);
+    l.frustumCulled = false;
+    return l;
+  }, []);
+  useEffect(
+    () => () => {
+      line.geometry.dispose();
+      (line.material as THREE.Material).dispose();
+    },
+    [line],
+  );
+  const lineRef = useRef<THREE.Line>(null);
+  const bridle = useMemo(() => new THREE.Vector3(), []);
+  const look = useMemo(() => new THREE.Vector3(), []);
+  useFrame((state) => {
+    const g = kite.current;
+    const string = lineRef.current;
+    if (!g || !string) return;
+    const t = reduce ? 0 : state.clock.elapsedTime;
+    g.visible = day.current > 0.01;
+    string.visible = g.visible;
+    const sx = Math.sin(t * 0.45);
+    g.position.set(KITE.x + sx * 2.4, KITE.y + Math.sin(t * 0.9) * 0.9 + Math.sin(t * 0.31) * 0.5, KITE.z);
+    g.rotation.set(-0.35, 0, -Math.cos(t * 0.45) * 0.4);
+    g.updateMatrixWorld();
+    bridle.set(0, 0.05, 0).applyMatrix4(g.matrixWorld);
+    // The line sags a little between the kite and the flyer.
+    const positions = string.geometry.getAttribute("position") as THREE.BufferAttribute;
+    for (let i = 0; i < 32; i++) {
+      const u = i / 31;
+      const x = bridle.x + (KITE_ANCHOR.x - bridle.x) * u;
+      const y = bridle.y + (KITE_ANCHOR.y - bridle.y) * u - Math.sin(u * Math.PI) * 1.6;
+      const z = bridle.z + (KITE_ANCHOR.z - bridle.z) * u;
+      positions.setXYZ(i, x, y, z);
+    }
+    positions.needsUpdate = true;
+    // From high above the line would cut straight across the name; it only shows near eye level.
+    state.camera.getWorldDirection(look);
+    const m = string.material as THREE.ShaderMaterial;
+    m.uniforms.uOpacity.value = day.current * 0.75 * (1 - smoothstepJs(0.3, 0.6, -look.y));
+  });
+  return (
+    <>
+      <group ref={kite} visible={false}>
+        <Prop geometry={halves} look={{ color: [0.86, 0.22, 0.12], shine: 0.15 }} day={day} />
+        <Prop geometry={right} look={{ color: [0.97, 0.76, 0.12], shine: 0.15 }} day={day} />
+        <Prop geometry={tail} look={{ color: [0.1, 0.45, 0.62], shine: 0.05, flutter: [0.1, 3.2, 6.5, 1] }} day={day} position={[0, -0.55, 0]} />
+      </group>
+      <primitive object={line} ref={lineRef} />
+    </>
+  );
+}
+
+/* The surf model, ported from surfVertex so the paddleboarder rides the rendered swell. */
+const SURF_SPEED = 5.5;
+const SURF_SPACING = 24;
+const fract = (v: number) => v - Math.floor(v);
+const glslMod = (a: number, b: number) => a - b * Math.floor(a / b);
+const smoothstepJs = (e0: number, e1: number, v: number) => {
+  const t = Math.min(1, Math.max(0, (v - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
+};
+const hash21 = (x: number, y: number) => {
+  let px = fract(x * 233.34);
+  let py = fract(y * 851.73);
+  const d = px * (px + 23.45) + py * (py + 23.45);
+  px += d;
+  py += d;
+  return fract(px * py);
+};
+const vnoise = (x: number, y: number) => {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const fx = x - ix;
+  const fy = y - iy;
+  const ux = fx * fx * (3 - 2 * fx);
+  const uy = fy * fy * (3 - 2 * fy);
+  const a = hash21(ix, iy);
+  const b = hash21(ix + 1, iy);
+  const c = hash21(ix, iy + 1);
+  const d = hash21(ix + 1, iy + 1);
+  return a + (b - a) * ux + (c - a) * uy * (1 - ux) + (d - b) * ux * uy;
+};
+const surfAmplitude = (d: number) => 1.25 * smoothstepJs(SURF_RANGE, 42, d) * smoothstepJs(2.5, 15, d);
+const surfBend = (x: number) => Math.sin(x * 0.07 + 1.3) * 3.5 + (vnoise(x * 0.045, 3) - 0.5) * 11;
+
+/** Height of the surf surface and its tallest crest at distance D from the shore. */
+function surfAt(x: number, D: number, t: number) {
+  const bend = surfBend(x) * smoothstepJs(SURF_RANGE, 20, D);
+  let h = 0;
+  let crest = 0;
+  for (let k = 0; k < 3; k++) {
+    const life = glslMod(k * SURF_SPACING - t * SURF_SPEED, SURF_RANGE);
+    const lifeFade = smoothstepJs(0, 8, life) * smoothstepJs(SURF_RANGE, SURF_RANGE - 8, life);
+    const center = life + bend;
+    const dd = D - center;
+    const width = dd < 0 ? 1.5 : 5.5;
+    const shape = Math.exp(-(dd * dd) / (width * width));
+    const a = surfAmplitude(center) * lifeFade;
+    h += a * shape;
+    crest = Math.max(crest, shape * a);
+  }
+  return { h, crest };
+}
+
+/** Rendered height at a world position, allowing for the crest leaning shoreward in surfVertex. */
+function surfHeight(x: number, D: number, t: number) {
+  const guess = surfAt(x, D, t);
+  return surfAt(x, D + guess.crest * 0.55, t).h;
+}
+
+const SUP_LANE = 56; // metres out from the shore: beyond the break, where the swell is gentle
+const SUP_RANGE: [number, number] = [-18, 22];
+const STROKE = 1.7; // seconds per paddle stroke
+
+/**
+ * A stand-up paddleboarder cruising along beyond the break: steady strokes that
+ * surge the board forward, switching sides every few strokes, rising and falling
+ * gently on the swell, and turning slowly at each end of the run.
+ */
+function PaddleBoarder({ day, reduce }: { day: DayRef; reduce: boolean }) {
+  const kit = useKit();
+  const root = useRef<THREE.Group>(null);
+  const body = useRef<THREE.Group>(null);
+  const stroke = useRef<THREE.Group>(null);
+  const opacity = useRef(0);
+  const board = useDisposable(() => {
+    const shape = new THREE.Shape();
+    shape.absellipse(0, 0, 1.6, 0.38, 0, Math.PI * 2, false, 0);
+    const g = new THREE.ExtrudeGeometry(shape, { depth: 0.08, bevelEnabled: true, bevelSize: 0.03, bevelThickness: 0.03, bevelSegments: 2, curveSegments: 28 });
+    g.rotateX(-Math.PI / 2);
+    return g;
+  });
+  const blade = useDisposable(() => {
+    const shape = new THREE.Shape();
+    shape.absellipse(0, 0, 0.1, 0.22, 0, Math.PI * 2, false, 0);
+    return new THREE.ShapeGeometry(shape, 12);
+  });
+  const motion = useRef({ x: SUP_RANGE[0] + 6, dir: 1, heading: 0, y: 0, pitch: 0, roll: 0, strokes: 0 });
+  const tools = useMemo(() => ({ yaw: new THREE.Quaternion(), tilt: new THREE.Quaternion(), up: new THREE.Vector3(0, 1, 0), normal: new THREE.Vector3() }), []);
+  const suit: PropLook = { color: [0.06, 0.1, 0.14], shine: 0.25 };
+  const skin: PropLook = { color: [0.5, 0.32, 0.22], shine: 0.1 };
+
+  useFrame((state, rawDelta) => {
+    const g = root.current;
+    if (!g) return;
+    opacity.current = reduce ? 0 : day.current;
+    g.visible = opacity.current > 0.01;
+    if (!g.visible) return;
+    const dt = Math.min(rawDelta, 0.05);
+    const t = state.clock.elapsedTime;
+    const m = motion.current;
+
+    // Each stroke pulls the board on; it coasts and slows between strokes.
+    const phase = (t / STROKE) % 1;
+    const power = phase < 0.45 ? Math.sin((phase / 0.45) * Math.PI) : 0;
+    const speed = 0.75 + power * 0.7;
+    const turning = (m.dir > 0 && m.x > SUP_RANGE[1]) || (m.dir < 0 && m.x < SUP_RANGE[0]);
+    if (turning) m.dir *= -1;
+    const targetHeading = m.dir > 0 ? 0 : Math.PI;
+    m.heading = THREE.MathUtils.damp(m.heading, targetHeading, 0.45, dt);
+    m.x += Math.cos(m.heading) * speed * dt;
+
+    // Ride the swell: follow a softened surface height and slope so it never snaps.
+    const D = SUP_LANE;
+    const h = surfHeight(m.x, D, t);
+    const slopeD = (surfHeight(m.x, D + 1.5, t) - surfHeight(m.x, D - 1.5, t)) / 3;
+    const slopeX = (surfHeight(m.x + 1.5, D, t) - surfHeight(m.x - 1.5, D, t)) / 3;
+    m.y = THREE.MathUtils.damp(m.y, h, 3, dt);
+    m.pitch = THREE.MathUtils.damp(m.pitch, slopeD, 2.5, dt);
+    m.roll = THREE.MathUtils.damp(m.roll, slopeX, 2.5, dt);
+    g.position.set(m.x, -3.99 + m.y + Math.sin(t * 1.7) * 0.015, SHORE_Z - D);
+    tools.yaw.setFromAxisAngle(tools.up, m.heading);
+    tools.normal.set(-m.roll * 0.8, 1, m.pitch * 0.8).normalize();
+    tools.tilt.setFromUnitVectors(tools.up, tools.normal);
+    g.quaternion.copy(tools.tilt).multiply(tools.yaw);
+
+    // The paddle reaches forward, pulls back through the water, lifts and recovers.
+    const s = stroke.current;
+    if (s) {
+      const swing = phase < 0.45 ? THREE.MathUtils.lerp(0.55, -0.45, phase / 0.45) : THREE.MathUtils.lerp(-0.45, 0.55, (phase - 0.45) / 0.55);
+      const lifted = phase < 0.45 ? 0 : Math.sin(((phase - 0.45) / 0.55) * Math.PI) * 0.18;
+      s.rotation.set(lifted, 0, swing);
+      // Switch sides every four strokes.
+      const side = Math.floor(t / STROKE / 4) % 2 === 0 ? 1 : -1;
+      s.scale.z = side;
+    }
+    if (body.current) body.current.rotation.z = -0.08 - power * 0.12;
+  });
+
+  const limb = (from: [number, number, number], to: [number, number, number], radius: number, look: PropLook, key: string) => {
+    const a = new THREE.Vector3(...from);
+    const b = new THREE.Vector3(...to);
+    const mid = a.clone().add(b).multiplyScalar(0.5);
+    const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()));
+    return <Prop key={key} geometry={kit.cylinder} look={look} day={opacity} position={[mid.x, mid.y, mid.z]} rotation={[e.x, e.y, e.z]} scale={[radius, a.distanceTo(b), radius]} />;
+  };
+
+  return (
+    <group ref={root} visible={false}>
+      <Prop geometry={board} look={{ color: [0.94, 0.93, 0.9], color2: [0.05, 0.45, 0.5], pattern: 2, stripes: 8, shine: 0.6 }} day={opacity} />
+      {/* Standing tall with soft knees, hips square to the nose. */}
+      <group ref={body} position={[0, 0.1, 0]}>
+        {limb([0.05, 0.02, 0.16], [0.1, 0.48, 0.14], 0.055, suit, "shinL")}
+        {limb([0.1, 0.48, 0.14], [0.02, 0.92, 0.1], 0.07, suit, "thighL")}
+        {limb([0.05, 0.02, -0.16], [0.1, 0.48, -0.14], 0.055, suit, "shinR")}
+        {limb([0.1, 0.48, -0.14], [0.02, 0.92, -0.1], 0.07, suit, "thighR")}
+        {limb([0.02, 0.9, 0], [0.06, 1.48, 0], 0.14, suit, "torso")}
+        <Prop geometry={kit.sphere} look={skin} day={opacity} position={[0.08, 1.66, 0]} scale={0.105} />
+        <Prop geometry={kit.sphere} look={{ color: [0.07, 0.05, 0.04] }} day={opacity} position={[0.05, 1.7, 0]} scale={[0.105, 0.09, 0.105]} />
+        {/* Arms and paddle swing together from the shoulders. */}
+        <group ref={stroke} position={[0.06, 1.42, 0]}>
+          {limb([0, 0, 0.14], [0.32, 0.12, 0.24], 0.042, skin, "armTop")}
+          {limb([0, 0, -0.14], [0.34, -0.42, 0.24], 0.042, skin, "armLow")}
+          <Prop geometry={kit.cylinder} look={{ color: [0.12, 0.12, 0.13], shine: 0.5 }} day={opacity} position={[0.34, -0.55, 0.24]} rotation={[0, 0, -0.03]} scale={[0.016, 1.95, 0.016]} />
+          <Prop geometry={blade} look={{ color: [0.9, 0.35, 0.12], shine: 0.3 }} day={opacity} position={[0.37, -1.5, 0.24]} rotation={[0, Math.PI / 2, 0]} />
+        </group>
+      </group>
+    </group>
+  );
+}
+
+/** Tufts of marram grass round the palms and the tower, combing in the breeze. */
+function DuneGrass({ day }: { day: DayRef }) {
+  const material = useRef<THREE.ShaderMaterial>(null);
+  const geometry = useDisposable(() => {
+    const tufts: [number, number, number][] = [
+      [11.7, -14.7, 1],
+      [14.4, -16.4, 0.9],
+      [16.5, -16.3, 0.8],
+      [18.9, -18.3, 1],
+      [-13.1, -11.8, 1],
+      [-15.8, -13.4, 0.85],
+      [-18.2, -16.4, 0.9],
+      [-20.6, -18.4, 1],
+      [-13.4, -18.6, 0.8],
+      [-17.4, -20.8, 0.7],
+      [12.2, -11.4, 0.7],
+    ];
+    const random = seeded(4242);
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const colors: number[] = [];
+    const along: number[] = [];
+    const tips: number[] = [];
+    const index: number[] = [];
+    for (const [tx, tz, size] of tufts) {
+      const baseY = sandY(tz) - 0.02;
+      const blades = 34;
+      for (let b = 0; b < blades; b++) {
+        const angle = random() * Math.PI * 2;
+        const spread = random() * 0.22 * size;
+        const root = new THREE.Vector3(tx + Math.cos(angle) * spread, baseY, tz + Math.sin(angle) * spread);
+        const height = (0.35 + random() * 0.5) * size;
+        const lean = 0.15 + random() * 0.45;
+        const out = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+        const across = new THREE.Vector3(-out.z, 0, out.x);
+        const width = 0.022 + random() * 0.012;
+        const shade = 0.75 + random() * 0.5;
+        const base = new THREE.Color(0.24, 0.26, 0.1).multiplyScalar(shade);
+        const tip = new THREE.Color(0.55, 0.47, 0.25).multiplyScalar(shade);
+        const start = positions.length / 3;
+        const segments = 4;
+        for (let k = 0; k <= segments; k++) {
+          const u = k / segments;
+          const p = root.clone().addScaledVector(out, lean * height * u * u).add(new THREE.Vector3(0, height * (u - lean * 0.35 * u * u), 0));
+          const w = width * (1 - u * 0.92);
+          const c = base.clone().lerp(tip, u);
+          const normal = new THREE.Vector3().crossVectors(across, new THREE.Vector3(0, 1, 0).addScaledVector(out, lean)).normalize();
+          for (const side of [-1, 1]) {
+            const v = p.clone().addScaledVector(across, (side * w) / 2);
+            positions.push(v.x, v.y, v.z);
+            normals.push(normal.x, normal.y, normal.z);
+            colors.push(c.r, c.g, c.b);
+            along.push(u * 0.55);
+            tips.push(u * 0.4);
+          }
+        }
+        for (let k = 0; k < segments; k++) {
+          const a = start + k * 2;
+          index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+        }
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    g.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+    g.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    g.setAttribute("aAlong", new THREE.Float32BufferAttribute(along, 1));
+    g.setAttribute("aTip", new THREE.Float32BufferAttribute(tips, 1));
+    g.setIndex(index);
+    return g;
+  });
+  const uniforms = useMemo(() => ({ uTime: { value: 0 }, uPhase: { value: 0.7 }, uOpacity: { value: 0 }, uSunDir: { value: SUN_DIR.clone() } }), []);
+  useFrame((state) => {
+    const m = material.current;
+    if (!m) return;
+    m.uniforms.uTime.value = state.clock.elapsedTime * 1.4;
+    m.uniforms.uOpacity.value = day.current;
+  });
+  return (
+    <mesh geometry={geometry} frustumCulled={false}>
+      <shaderMaterial ref={material} uniforms={uniforms} vertexShader={frondVertex} fragmentShader={frondFragment} transparent side={THREE.DoubleSide} />
+    </mesh>
+  );
+}
+
 /* ------------------------------------------------------------------ palms + headlands */
 
 type PalmSpec = { x: number; z: number; lean: number; turn: number; height: number; scale: number };
 
 const PALMS: PalmSpec[] = [
-  { x: 9.2, z: -15.5, lean: -0.34, turn: 0.4, height: 7.2, scale: 1 },
-  { x: 11.5, z: -17.5, lean: -0.22, turn: -0.3, height: 6.1, scale: 0.9 },
-  { x: -15, z: -21, lean: 0.25, turn: 2.6, height: 6.6, scale: 0.85 },
+  { x: 13, z: -15.5, lean: -0.3, turn: 0.25, height: 8.6, scale: 1 },
+  { x: 17.8, z: -17.2, lean: -0.2, turn: -0.35, height: 7, scale: 0.9 },
+  { x: -14.5, z: -12.5, lean: 0.28, turn: -0.2, height: 7.8, scale: 0.95 },
+  { x: -19.5, z: -17.2, lean: 0.14, turn: 0.5, height: 5.4, scale: 0.8 },
 ];
+
+/** Where a palm's crown ends up, in world space (matches the Palm group transform). */
+function crownOf(spec: PalmSpec) {
+  const reach = spec.lean * spec.height * spec.scale;
+  return new THREE.Vector3(
+    spec.x + reach * Math.cos(spec.turn),
+    sandY(spec.z) - 0.25 + spec.height * spec.scale,
+    spec.z - reach * Math.sin(spec.turn),
+  );
+}
 
 /** Builds one frond: an arched rachis with leaflets hanging from both sides. */
 function buildFrond(length: number, seed: number, dead: boolean) {
@@ -872,12 +1583,16 @@ export function Sea({ day, reduce, pointer, pointerActive }: SeaProps) {
       <Surf day={day} reduce={reduce} />
       <Beach day={day} reduce={reduce} />
       <BeachProps day={day} />
+      <DuneGrass day={day} />
       {PALMS.map((palm) => (
         <Palm key={palm.x} spec={palm} day={day} />
       ))}
+      <PaddleBoarder day={day} reduce={reduce} />
       <Dolphins day={day} reduce={reduce} />
       <Boats day={day} reduce={reduce} />
       <Gulls day={day} reduce={reduce} />
+      <SoaringGulls day={day} reduce={reduce} />
+      <Kite day={day} reduce={reduce} />
     </group>
   );
 }

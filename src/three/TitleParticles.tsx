@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { hasEnteredSite } from "../lib/events";
 import type { TitleId } from "../lib/titles";
+import { NO_REFLECTION } from "./layers";
 import { titleFragment, titleVertex } from "./shaders";
 import { buildTitleAtlas } from "./titleAtlas";
 import type { TitleAtlas } from "./titleAtlas";
@@ -235,7 +236,7 @@ function TitleSystem({ atlas, count, reduce, day }: { atlas: TitleAtlas; count: 
 
   return (
     <group ref={group}>
-      <points ref={points} geometry={geometry} frustumCulled={false} renderOrder={10}>
+      <points ref={points} geometry={geometry} frustumCulled={false} renderOrder={10} layers={NO_REFLECTION}>
         <shaderMaterial
           ref={material}
           uniforms={uniforms}

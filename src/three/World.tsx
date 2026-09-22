@@ -21,6 +21,7 @@ import {
   terrainVertex,
 } from "./shaders";
 import { DayGradeEffect } from "./DayGrade";
+import { NO_REFLECTION } from "./layers";
 import { Sea } from "./Sea";
 import { TitleParticles } from "./TitleParticles";
 
@@ -58,10 +59,23 @@ type Frame = {
   aurora: number;
   /** 0 = moonlit blue ridges, 1 = violet-lit ridges. */
   violet: number;
+  /** Camera overrides for the beach, blended in with the scene. */
+  water?: Partial<Pick<Frame, "camY" | "lookY" | "lookZ">>;
 };
 
 /** High above the valley, looking down at the stream: where the intro dive starts. */
-const DIVE: Frame = { camY: 48, lookY: -40, lookZ: -34, terrain: 1.1, stars: 1.3, aurora: 0.7, violet: 0 };
+const DIVE: Frame = {
+  camY: 48,
+  lookY: -40,
+  lookZ: -34,
+  terrain: 1.1,
+  stars: 1.3,
+  aurora: 0.7,
+  violet: 0,
+  // At the beach the drone looks out over the surf, so the name sits on clear water
+  // along the shoreline and the palms and beach life stay below it.
+  water: { lookZ: -52 },
+};
 
 const FRAMES: Record<string, Frame> = {
   top: { camY: 4.2, lookY: 1.6, lookZ: -60, terrain: 1, stars: 1, aurora: 0.75, violet: 0.1 },
@@ -208,16 +222,29 @@ function useSectionStops() {
 
 const smooth = (t: number) => t * t * (3 - 2 * t);
 
-function frameAt(stops: Stop[], y: number): Frame {
-  if (y <= stops[0].at) return stops[0].frame;
+/** A frame's camera as seen in the current blend of night and beach. */
+function resolve(frame: Frame, day: number): Frame {
+  if (!frame.water || day <= 0) return frame;
+  const w = frame.water;
+  return {
+    ...frame,
+    camY: frame.camY + ((w.camY ?? frame.camY) - frame.camY) * day,
+    lookY: frame.lookY + ((w.lookY ?? frame.lookY) - frame.lookY) * day,
+    lookZ: frame.lookZ + ((w.lookZ ?? frame.lookZ) - frame.lookZ) * day,
+  };
+}
+
+function frameAt(stops: Stop[], y: number, day: number): Frame {
+  if (y <= stops[0].at) return resolve(stops[0].frame, day);
   const last = stops[stops.length - 1];
-  if (y >= last.at) return last.frame;
+  if (y >= last.at) return resolve(last.frame, day);
   for (let i = 0; i < stops.length - 1; i++) {
-    const a = stops[i];
-    const b = stops[i + 1];
+    const a = { frame: resolve(stops[i].frame, day), at: stops[i].at };
+    const b = { frame: resolve(stops[i + 1].frame, day), at: stops[i + 1].at };
     if (y >= a.at && y < b.at) {
       const t = smooth((y - a.at) / Math.max(1, b.at - a.at));
-      const mix = (key: keyof Frame) => a.frame[key] + (b.frame[key] - a.frame[key]) * t;
+      const mix = (key: "camY" | "lookY" | "lookZ" | "terrain" | "stars" | "aurora" | "violet") =>
+        a.frame[key] + (b.frame[key] - a.frame[key]) * t;
       return {
         camY: mix("camY"),
         lookY: mix("lookY"),
@@ -229,7 +256,7 @@ function frameAt(stops: Stop[], y: number): Frame {
       };
     }
   }
-  return last.frame;
+  return resolve(last.frame, day);
 }
 
 /**
@@ -292,21 +319,23 @@ function Scene({ scrollY, quality, reduce, dayRef }: SceneProps) {
   const stops = useSectionStops();
   const pointer = usePointer();
 
+  const startBlend = getScene() === "water" ? 1 : 0;
+  const start = resolve(DIVE, startBlend);
   const motion = useRef({
     travel: 0,
     flow: 0,
     last: Number.NaN,
     boost: 0,
-    camY: DIVE.camY,
-    lookY: DIVE.lookY,
-    lookZ: DIVE.lookZ,
+    camY: start.camY,
+    lookY: start.lookY,
+    lookZ: start.lookZ,
     terrain: DIVE.terrain,
     stars: DIVE.stars,
     aurora: DIVE.aurora,
     violet: DIVE.violet,
     pointerActive: 0,
     rippleAt: -100,
-    blend: getScene() === "water" ? 1 : 0,
+    blend: startBlend,
     px: 0,
     py: 0,
     ready: false,
@@ -372,15 +401,6 @@ function Scene({ scrollY, quality, reduce, dayRef }: SceneProps) {
     const dy = y - s.last;
     s.last = y;
 
-    const target = frameAt(stops.current, y);
-    s.camY = damp(s.camY, target.camY, 2.2, dt);
-    s.lookY = damp(s.lookY, target.lookY, 2.2, dt);
-    s.lookZ = damp(s.lookZ, target.lookZ, 2.2, dt);
-    s.terrain = damp(s.terrain, target.terrain, 2.5, dt);
-    s.stars = damp(s.stars, target.stars, 2.5, dt);
-    s.aurora = damp(s.aurora, target.aurora, 1.5, dt);
-    s.violet = damp(s.violet, target.violet, 1.5, dt);
-
     // Scene blend: a fixed-length, eased cross-fade so the page colours and the world move together.
     const goal = getScene() === "water" ? 1 : 0;
     const step = dt / (reduce ? 0.25 : SCENE_BLEND_SECONDS);
@@ -388,6 +408,15 @@ function Scene({ scrollY, quality, reduce, dayRef }: SceneProps) {
     const dayValue = smootherstep(s.blend);
     dayRef.current = dayValue;
     const night = 1 - dayValue;
+
+    const target = frameAt(stops.current, y, dayValue);
+    s.camY = damp(s.camY, target.camY, 2.2, dt);
+    s.lookY = damp(s.lookY, target.lookY, 2.2, dt);
+    s.lookZ = damp(s.lookZ, target.lookZ, 2.2, dt);
+    s.terrain = damp(s.terrain, target.terrain, 2.5, dt);
+    s.stars = damp(s.stars, target.stars, 2.5, dt);
+    s.aurora = damp(s.aurora, target.aurora, 1.5, dt);
+    s.violet = damp(s.violet, target.violet, 1.5, dt);
 
     if (!reduce) s.travel += dy * 0.028 + dt * 0.8;
     const speed = Math.min(1, Math.abs(dy) / Math.max(dt, 0.001) / 2500);
@@ -602,6 +631,7 @@ export default function World({ scrollY }: { scrollY: MotionValue<number> }) {
       camera={{ fov: 55, near: 0.1, far: 1200, position: [0, DIVE.camY, 0] }}
       gl={{ antialias: false, alpha: false, powerPreference: "high-performance", stencil: false }}
       style={{ pointerEvents: "none" }}
+      onCreated={({ camera }) => camera.layers.enable(NO_REFLECTION)}
     >
       <color attach="background" args={["#04060b"]} />
       <Scene scrollY={scrollY} quality={quality} reduce={reduce} dayRef={dayRef} />

@@ -51,7 +51,7 @@ export function Hero({ ready }: { ready: boolean }) {
             animate={{ opacity: ready ? 1 : 0 }}
             transition={{ duration: 1.2, ease: EASE, delay: 0.3 }}
           >
-            <p className="eyebrow flex items-center gap-3">
+            <p className="eyebrow text-chip flex w-fit items-center gap-3">
               <span className="relative inline-flex size-2">
                 <span className="absolute inset-0 animate-ping rounded-full bg-accent/60" />
                 <span className="relative size-2 rounded-full bg-accent" />
@@ -68,7 +68,7 @@ export function Hero({ ready }: { ready: boolean }) {
             style={staticCopy ? undefined : { opacity: copyOpacity, y: copyY, pointerEvents: copyEvents }}
             className="mt-5 grid items-end gap-6 md:mt-6 md:gap-8 lg:grid-cols-12 lg:gap-10"
           >
-            <div className="lg:col-span-7">
+            <div className="text-card lg:col-span-7">
               <p className="max-w-2xl text-xl font-medium leading-snug tracking-[-0.02em] sm:text-2xl md:text-3xl">
                 {parseAccent(profile.headline).map((word, i) => (
                   <span key={`${word.text}-${i}`} className={word.accent ? "font-serif font-normal italic text-aurora pr-[0.08em]" : undefined}>
